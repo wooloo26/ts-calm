@@ -3,8 +3,8 @@
  * @allow strict-fp/no-null -- Compare only against the external absence sentinel.
  * @allow strict-fp/no-undefined -- Compare only against the external absence sentinel.
  */
-import { none, some } from './containers.ts';
-import type { Option } from './containers.ts';
+import { none, some } from '#fp/containers';
+import type { Option } from '#fp/containers';
 
 /**
  * Reject only external null and undefined. Every other falsy value, including 0, false and the

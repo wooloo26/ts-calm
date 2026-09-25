@@ -1,5 +1,5 @@
-import { isArray, isObject, hasOwn } from '../fp/guards.ts';
-import type { Diagnostic } from './types.ts';
+import { isArray, isObject, hasOwn } from '#fp/guards';
+import type { Diagnostic } from '#check/types';
 
 const text = (value: unknown, key: string): string =>
   hasOwn(value, key) && typeof value[key] === 'string' ? value[key] : '';

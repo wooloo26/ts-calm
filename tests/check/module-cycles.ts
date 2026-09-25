@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { checkSourceProject } from '../../src/check/sources.b.ts';
-import { withProject } from '../../fixtures/project.ts';
+import { checkSourceProject } from '#check/sources.b';
+import { withProject } from '#fixtures/project';
 
 it('finds directory cycles without a file cycle and reports concrete witness locations', () => {
   withProject(

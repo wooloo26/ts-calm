@@ -1,4 +1,4 @@
-import { defineConfig } from './src/check/index.ts';
+import { defineConfig } from '#check/index';
 
 export default defineConfig({
   rules: { 'commit-message': { scopes: ['root', 'fp', 'check', 'docs', 'build'] } },

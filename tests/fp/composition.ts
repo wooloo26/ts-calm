@@ -16,9 +16,9 @@ import {
   some,
   toResult,
   traverse,
-} from '#src/index.ts';
-import type { AsyncResult } from '#src/index.ts';
-import { raise } from '#fixtures/foundation.ts';
+} from '#fp/index';
+import type { AsyncResult } from '#fp/index';
+import { raise } from '#fixtures/fp/foundation';
 
 test('maps only newly constructed cleanup failures without inspecting business error tags', () => {
   const business = { code: 'cleanup-failed', message: 'a feature-owned failure' };

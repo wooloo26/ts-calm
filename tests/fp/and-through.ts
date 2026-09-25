@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
-import type { Result } from '#src/index.ts';
-import { andThrough, err, getError, isErr, ok, some } from '#src/index.ts';
-import { raise } from '#fixtures/foundation.ts';
+import type { Result } from '#fp/index';
+import { andThrough, err, getError, isErr, ok, some } from '#fp/index';
+import { raise } from '#fixtures/fp/foundation';
 
 type ReadFailure = Readonly<{ code: 'missing' }>;
 type CheckFailure = Readonly<{ code: 'stale' }>;

@@ -9,17 +9,19 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkProject, checkLint } from './project.ts';
-import { formatProject, typecheckProject } from './tools.b.ts';
-import { initializeProject } from './init.b.ts';
-import { explainRule, helpForRule } from './rule-help.ts';
-import { checkStaged, checkStagedMessage } from './staged.b.ts';
-import { formatDiagnostics } from './diagnostics.ts';
-import type { Diagnostic } from './types.ts';
+import { checkProject, checkLint } from '#check/project';
+import { formatProject, typecheckProject } from '#check/tools.b';
+import { initializeProject } from '#check/init.b';
+import { initializeWorkspace } from '#check/workspace.b';
+import { explainRule, helpForRule } from '#check/rule-help';
+import { checkStaged, checkStagedMessage } from '#check/staged.b';
+import { formatDiagnostics } from '#check/diagnostics';
+import type { Diagnostic } from '#check/types';
 
 const usage =
-  'ts-calm check [--staged] [--json] [--cwd <directory>]\nts-calm fmt [--check] [--json] [--cwd <directory>]\nts-calm lint | typecheck | init [--json] [--cwd <directory>]\nts-calm explain <rule> [--json]\nts-calm commit-message --file <path> [--json] [--cwd <directory>]';
-const main = (): void => {
+  'ts-calm check [--staged] [--json] [--cwd <directory>]\nts-calm fmt [--check] [--json] [--cwd <directory>]\nts-calm lint | typecheck [--json] [--cwd <directory>]\nts-calm init [--template pnpm-turbo] [--json] [--cwd <directory>]\nts-calm explain <rule> [--json]\nts-calm commit-message --file <path> [--json] [--cwd <directory>]';
+/** @impure Read CLI arguments, execute commands and write output or exit status. */
+const main = async (): Promise<void> => {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
     console.log(usage);
@@ -35,21 +37,28 @@ const main = (): void => {
     file = '',
     staged = false,
     json = false,
-    formatCheck = false;
+    formatCheck = false,
+    template = '';
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--json') json = true;
     else if (argument === '--staged' && command === 'check') staged = true;
     else if (argument === '--check' && command === 'fmt') formatCheck = true;
-    else if (argument === '--cwd' || (argument === '--file' && command === 'commit-message')) {
+    else if (
+      argument === '--cwd' ||
+      (argument === '--file' && command === 'commit-message') ||
+      (argument === '--template' && command === 'init')
+    ) {
       const value = args[++index];
       if (!value || value.startsWith('--')) throw new Error(`Missing value for ${argument}.`);
       if (argument === '--cwd') root = resolve(value);
+      else if (argument === '--template') template = value;
       else file = value;
     } else throw new Error(`Unknown argument ${argument}.\n${usage}`);
   }
   if (command === 'init') {
-    const result = initializeProject(root);
+    if (template && template !== 'pnpm-turbo') throw new Error(`Unknown template ${template}.`);
+    const result = template ? await initializeWorkspace(root) : initializeProject(root);
     console.log(
       json
         ? JSON.stringify(result)
@@ -82,7 +91,7 @@ const main = (): void => {
 };
 
 try {
-  main();
+  await main();
 } catch (cause) {
   const message = cause instanceof Error ? cause.message : 'Check execution failed.';
   if (process.argv.includes('--json'))

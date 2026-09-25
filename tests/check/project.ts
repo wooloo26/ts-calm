@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { checkSourceProject as checkProject } from '../../src/check/sources.b.ts';
-import { linkDependencies, withProject } from '../../fixtures/project.ts';
+import { checkSourceProject as checkProject } from '#check/sources.b';
+import { linkDependencies, withProject } from '#fixtures/project';
 
 const relaxed = { rules: { 'strict-fp': false, boundary: false } } as const;
 describe('project import graph', () => {
+  it('loads source-condition configuration without a dist directory', () => {
+    withProject(
+      {
+        'package.json':
+          '{"name":"condition-test","type":"module","imports":{"#config":{"dev-source":"./src/config.ts","default":"./dist/config.js"}}}',
+        'tsconfig.json':
+          '{"compilerOptions":{"customConditions":["dev-source"],"moduleResolution":"NodeNext","module":"NodeNext"}}',
+        'ts-calm.config.ts': 'export {default} from "#config";',
+        'src/config.ts': 'export default {rules:{"strict-fp":false}};',
+        'src/a.ts': 'export const value=null;',
+      },
+      (root) => expect(checkProject(root)).toEqual([]),
+    );
+  });
   it('includes type queries and constant template imports', () => {
     withProject(
       {

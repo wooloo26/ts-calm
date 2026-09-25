@@ -1,13 +1,14 @@
-export { defineConfig } from './configuration.ts';
-export { runChecks, analyzeSources } from './engine.ts';
-export { checkProject, checkLint } from './project.ts';
-export { checkSourceProject } from './sources.b.ts';
-export { formatProject, typecheckProject } from './tools.b.ts';
-export { checkStaged } from './staged.b.ts';
-export { validateCommitMessage } from './commit-message.ts';
-export { formatDiagnostics } from './diagnostics.ts';
-export { initializeProject } from './init.b.ts';
-export { explainRule } from './rule-help.ts';
+export { defineConfig } from '#check/configuration';
+export { runChecks, analyzeSources } from '#check/engine';
+export { checkProject, checkLint } from '#check/project';
+export { checkSourceProject } from '#check/sources.b';
+export { formatProject, typecheckProject } from '#check/tools.b';
+export { checkStaged } from '#check/staged.b';
+export { validateCommitMessage } from '#check/commit-message';
+export { formatDiagnostics } from '#check/diagnostics';
+export { initializeProject } from '#check/init.b';
+export { initializeWorkspace } from '#check/workspace.b';
+export { explainRule } from '#check/rule-help';
 export type {
   Diagnostic,
   CheckConfig,
@@ -18,4 +19,4 @@ export type {
   ResolvedImport,
   ImportResolution,
   ImportFact,
-} from './types.ts';
+} from '#check/types';

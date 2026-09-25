@@ -1,5 +1,5 @@
-import { get, isErr, isNone, isResult, isSome, none, ok, some } from './containers.ts';
-import type { Err, None, Ok, Option, Result, Some } from './containers.ts';
+import { get, isErr, isNone, isResult, isSome, none, ok, some } from '#fp/containers';
+import type { Err, None, Ok, Option, Result, Some } from '#fp/containers';
 
 export function flatten<Next extends Result<unknown, unknown>>(value: Ok<Next>): Next;
 export function flatten<Problem>(value: Err<Problem>): Err<Problem>;

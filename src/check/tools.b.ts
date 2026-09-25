@@ -14,11 +14,11 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { capture } from '../fp/capture.b.ts';
-import { get, getError, isErr } from '../fp/containers.ts';
-import { projectPaths } from './sources.b.ts';
-import { lintDiagnostics, typeDiagnostics, isLintReport } from './tool-output.ts';
-import type { Diagnostic } from './types.ts';
+import { capture } from '#fp/capture.b';
+import { get, getError, isErr } from '#fp/containers';
+import { projectPaths } from '#check/sources.b';
+import { lintDiagnostics, typeDiagnostics, isLintReport } from '#check/tool-output';
+import type { Diagnostic } from '#check/types';
 
 export const lintConfigNames = [
   '.oxlintrc.json',
@@ -35,14 +35,17 @@ export const formatConfigNames = [
 export const packageRoot = fileURLToPath(new URL('../..', import.meta.url));
 const load = createRequire(import.meta.url);
 
+/** @impure Inspect filesystem configuration paths. */
 export const findConfiguration = (root: string, names: readonly string[]): string =>
   names.find((name) => existsSync(join(root, name))) ?? '';
 
+/** @impure Resolve the pinned tool entry in the installed dependency graph. */
 const binary = (name: string, path: string): string =>
   join(dirname(load.resolve(`${name}/package.json`)), path);
 const fileName = (root: string, file: string): string =>
   (isAbsolute(file) ? relative(root, file) : file).replaceAll('\\', '/');
 
+/** @impure Run a pinned subprocess with the current host environment. */
 const execute = (
   root: string,
   executable: string,
@@ -61,6 +64,7 @@ const execute = (
   return { status: result.status ?? 2, stdout: result.stdout, stderr: result.stderr };
 };
 
+/** @impure Read project files and execute the formatter, optionally writing formatted files. */
 export const formatProject = (
   root: string,
   check = true,
@@ -97,6 +101,7 @@ export const formatProject = (
   }));
 };
 
+/** @impure Execute the pinned type-aware linter and its backend. */
 export const lintProject = (root: string): readonly Diagnostic[] => {
   const backend = createRequire(load.resolve('oxlint-tsgolint/package.json'));
   const native = backend.resolve(
@@ -129,6 +134,7 @@ export const lintProject = (root: string): readonly Diagnostic[] => {
   return lintDiagnostics(get(parsed), (file) => fileName(root, file));
 };
 
+/** @impure Execute the compiler with an owned temporary build cache. */
 export const typecheckProject = (root: string): readonly Diagnostic[] => {
   const config = join(root, 'tsconfig.json');
   if (!existsSync(config))

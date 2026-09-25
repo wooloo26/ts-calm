@@ -4,7 +4,7 @@ export const raise = (cause: unknown): never => {
   throw cause;
 };
 
-import type { JsonValue } from '#src/json.b.ts';
+import type { JsonValue } from '#fp/json.b';
 export const invalidJsonFixture = (value: unknown): JsonValue => value as JsonValue;
 export const nullPrototypeFixture = (): unknown => Object.assign(Object.create(null), { value: 1 });
 export const sparseArrayFixture = (length: number): unknown[] => {

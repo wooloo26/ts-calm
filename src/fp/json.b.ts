@@ -4,10 +4,10 @@
  * @allow strict-fp/no-try -- Normalize native serialization and reflection failures.
  * @allow strict-fp/no-undefined -- Detect missing native diagnostic output explicitly.
  */
-import { err, get, isErr, isOption, isResult, ok, unit } from './containers.ts';
-import type { Result, Unit } from './containers.ts';
-import { toOptionData, toResultData } from './data.ts';
-import type { Codec } from './contracts.ts';
+import { err, get, isErr, isOption, isResult, ok, unit } from '#fp/containers';
+import type { Result, Unit } from '#fp/containers';
+import { toOptionData, toResultData } from '#fp/data';
+import type { Codec } from '#fp/contracts';
 
 export type JsonValue =
   | string

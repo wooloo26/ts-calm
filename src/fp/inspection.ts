@@ -1,5 +1,5 @@
-import { get, getError, isErr, isOk, isSome } from './containers.ts';
-import type { AsyncResult, Err, None, Ok, Option, Result, Some } from './containers.ts';
+import { get, getError, isErr, isOk, isSome } from '#fp/containers';
+import type { AsyncResult, Err, None, Ok, Option, Result, Some } from '#fp/containers';
 
 type Observation<Output> = Output & ([Output] extends [void] ? unknown : never);
 type AsyncObservation<Output> = Output & ([Awaited<Output>] extends [void] ? unknown : never);

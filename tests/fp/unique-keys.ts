@@ -1,7 +1,7 @@
 import { assert, array, property, string } from 'fast-check';
 import { expect, expectTypeOf, test } from 'vitest';
-import { isUniqueBy } from '#src/index.ts';
-import { raise } from '#fixtures/foundation.ts';
+import { isUniqueBy } from '#fp/index';
+import { raise } from '#fixtures/fp/foundation';
 
 test('checks selected keys without mutating input and stops at the first duplicate', () => {
   const visits: string[] = [];

@@ -1,4 +1,4 @@
-import type { Diagnostic, SourceFile } from './types.ts';
+import type { Diagnostic, SourceFile } from '#check/types';
 
 export const diagnostic = (
   source: SourceFile,

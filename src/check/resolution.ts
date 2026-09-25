@@ -1,15 +1,18 @@
 import { isAbsolute, relative } from 'node:path';
-import type { ImportResolution } from './types.ts';
+import type { ImportResolution } from '#check/types';
 
 export const classifyTarget = (
   root: string,
   owned: ReadonlySet<string>,
   specifier: string,
   resolved: string,
+  packageTarget = false,
 ): ImportResolution => {
   const path = relative(root, resolved).replaceAll('\\', '/');
   const inside = path !== '..' && !path.startsWith('../') && !isAbsolute(path);
   if (inside && owned.has(path)) return { kind: 'project', path };
+  if (!inside && packageTarget && !specifier.startsWith('.') && !specifier.startsWith('#'))
+    return { kind: 'external' };
   const dependency = resolved.replaceAll('\\', '/').includes('/node_modules/');
   if (!dependency && /\.[cm]?[jt]sx?$/.test(path) && !/\.d\.[cm]?ts$/.test(path))
     return {

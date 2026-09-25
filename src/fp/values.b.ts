@@ -2,9 +2,9 @@
  * @boundary Adapt collection membership and validated decoder output into precise nominal types.
  * @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
  */
-import { get, isErr, none, ok, some } from './containers.ts';
-import type { Option, Result } from './containers.ts';
-import type { NonEmptyReadonlyArray } from './contracts.ts';
+import { get, isErr, none, ok, some } from '#fp/containers';
+import type { Option, Result } from '#fp/containers';
+import type { NonEmptyReadonlyArray } from '#fp/contracts';
 
 declare const brand: unique symbol;
 export type Brand<Value, Name extends string> = Value & { readonly [brand]: Name };

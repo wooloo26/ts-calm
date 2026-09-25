@@ -22,15 +22,15 @@ import {
   some,
   transpose,
   validateAll,
-} from '#src/index.ts';
-import type { Decoder } from '#src/index.ts';
-import { capture, captureAsync, captureResult, captureResultAsync } from '#src/boundary.ts';
+} from '#fp/index';
+import type { Decoder } from '#fp/index';
+import { capture, captureAsync, captureResult, captureResultAsync } from '#fp/boundary';
 import {
   raise,
   sparseArrayFixture,
   presentMissingFixture,
   inheritedRecordFixture,
-} from '#fixtures/foundation.ts';
+} from '#fixtures/fp/foundation';
 
 describe('checked branded values and presence', () => {
   const positive: Decoder<number, 'not-positive'> = (input) =>

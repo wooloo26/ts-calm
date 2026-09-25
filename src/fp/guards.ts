@@ -1,6 +1,6 @@
-import { capture } from './capture.b.ts';
-import { get, isOk } from './containers.ts';
-import { isNonNullable } from './nullable.b.ts';
+import { capture } from '#fp/capture.b';
+import { get, isOk } from '#fp/containers';
+import { isNonNullable } from '#fp/nullable.b';
 
 const safely = (name: string, predicate: () => boolean): boolean => {
   const result = capture(predicate, { name });

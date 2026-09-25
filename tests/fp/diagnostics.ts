@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { err, formatDiagnostic, get, getError, isErr, ok, unit } from '#src/index.ts';
+import { err, formatDiagnostic, get, getError, isErr, ok, unit } from '#fp/index';
 describe('diagnostic presentation independent of wire DTOs', () => {
   it('makes Unit and native errors visible inside opaque containers', () => {
     expect(formatDiagnostic(ok())).toEqual(ok('{"status":"ok","value":"Unit"}'));

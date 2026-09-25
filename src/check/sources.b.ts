@@ -4,14 +4,16 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyzeSources, runChecks } from './engine.ts';
-import { excluded, selected } from './configuration.ts';
-import { loadConfiguration } from './config-reader.b.ts';
-import { resolveImports } from './resolver.b.ts';
-import type { Diagnostic, CheckConfig, SourceFile } from './types.ts';
+import { analyzeSources, runChecks } from '#check/engine';
+import { excluded, selected } from '#check/configuration';
+import { loadConfiguration } from '#check/config-reader.b';
+import { resolveImports } from '#check/resolver.b';
+import type { Diagnostic, CheckConfig, SourceFile } from '#check/types';
 
+/** @impure Enumerate project files on disk. */
 export const projectPaths = (root: string, config: CheckConfig = {}): readonly string[] => {
   const paths: string[] = [];
+  /** @impure Enumerate directories and append discovered paths. */
   const visit = (directory: string): void => {
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
       const path = directory ? `${directory}/${entry.name}` : entry.name;
@@ -24,6 +26,7 @@ export const projectPaths = (root: string, config: CheckConfig = {}): readonly s
   return paths.toSorted();
 };
 
+/** @impure Read project sources and resolve their filesystem imports. */
 export const checkSourceProject = (
   root: string,
   configuration?: CheckConfig,

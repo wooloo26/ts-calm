@@ -3,10 +3,10 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { git, initializeGit, withProject, write } from '../../fixtures/project.ts';
-import { checkStagedMessage, withStagedProject } from '../../src/check/staged.b.ts';
-import { checkSourceProject as checkProject } from '../../src/check/sources.b.ts';
-import { formatProject } from '../../src/check/tools.b.ts';
+import { git, initializeGit, withProject, write } from '#fixtures/project';
+import { checkStagedMessage, withStagedProject } from '#check/staged.b';
+import { checkSourceProject as checkProject } from '#check/sources.b';
+import { formatProject } from '#check/tools.b';
 
 const checkStaged = (root: string) => withStagedProject(root, checkProject);
 
@@ -44,7 +44,7 @@ describe('staged snapshots', () => {
       { 'src/a.ts': 'export const a=1;', 'src/b.ts': 'export {a} from "./a.ts";' },
       (root) => {
         initializeGit(root);
-        git(root, 'commit', '-m', 'feat(root): initial');
+        git(root, 'commit', '-m', 'root - add initial');
         write(root, 'src/a.ts', 'export {a} from "./b.ts";');
         git(root, 'add', 'src/a.ts');
         expect(checkStaged(root).map((issue) => issue.rule)).toContain('no-file-cycles');
@@ -73,8 +73,8 @@ describe('staged snapshots', () => {
       { 'ts-calm.config.ts': 'export default {rules:{"commit-message":{scopes:["fp"]}}}' },
       (root) => {
         initializeGit(root);
-        expect(checkStagedMessage(root, 'fix(fp): update')).toEqual([]);
-        expect(checkStagedMessage(root, 'fix(check): update').map((issue) => issue.rule)).toContain(
+        expect(checkStagedMessage(root, 'fp - fix update')).toEqual([]);
+        expect(checkStagedMessage(root, 'check - fix update').map((issue) => issue.rule)).toContain(
           'commit-message/scope',
         );
       },
@@ -85,7 +85,7 @@ describe('staged snapshots', () => {
 describe('CLI exit codes', () => {
   const cli = fileURLToPath(new URL('../../src/check/cli.b.ts', import.meta.url));
   const invoke = (root: string, ...args: string[]) =>
-    spawnSync(process.execPath, [cli, ...args, '--cwd', root], {
+    spawnSync(process.execPath, ['--conditions=ts-calm-source', cli, ...args, '--cwd', root], {
       encoding: 'utf8',
       windowsHide: true,
     });

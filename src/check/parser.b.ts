@@ -5,20 +5,21 @@
  * @allow strict-fp/no-try -- Native parser failures must become visible diagnostics.
  */
 import { parseSync } from 'oxc-parser';
-import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from './types.ts';
+import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from '#check/types';
 
-type Node = Readonly<Record<string, unknown>>;
+export type Node = Readonly<Record<string, unknown>>;
 type Environment = ReadonlyMap<string, string>;
-const record = (value: unknown): Node =>
+export const record = (value: unknown): Node =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Node) : {};
-const text = (node: Node, key: string): string => (typeof node[key] === 'string' ? node[key] : '');
-const offset = (node: Node, key = 'start'): number =>
+export const text = (node: Node, key: string): string =>
+  typeof node[key] === 'string' ? node[key] : '';
+export const offset = (node: Node, key = 'start'): number =>
   typeof node[key] === 'number' ? node[key] : 0;
-const functionNode = (node: Node): boolean =>
+export const functionNode = (node: Node): boolean =>
   ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
     text(node, 'type'),
   );
-const children = (node: Node): readonly Readonly<{ key: string; node: Node }>[] =>
+export const children = (node: Node): readonly Readonly<{ key: string; node: Node }>[] =>
   Object.entries(node).flatMap(([key, value]) =>
     (Array.isArray(value) ? value : [value])
       .map(record)
@@ -45,6 +46,7 @@ const expressionName = (node: Node, env: Environment): string => {
   return '';
 };
 
+/** @impure Update the supplied lexical binding environment. */
 const bindPattern = (pattern: Node, origin: string, env: Map<string, string>): void => {
   if (pattern['type'] === 'Identifier') {
     env.set(text(pattern, 'name'), origin);
@@ -114,7 +116,7 @@ const globalEffects = [
   'crypto.getRandomValues',
 ];
 
-const effectName = (name: string, custom: readonly string[]): string => {
+export const effectName = (name: string, custom: readonly string[]): string => {
   const normalized = name.replace(/^globalThis\./, '').replaceAll(':.', ':');
   for (const module of effectModules)
     if (normalized.startsWith(`${module}:`) || normalized.startsWith(`node:${module}:`))
@@ -229,6 +231,7 @@ const scoped = (node: Node, inherited: Environment): Map<string, string> => {
   return env;
 };
 
+/** @impure Register imported names in the supplied environment. */
 const bindImport = (node: Node, env: Map<string, string>): void => {
   const module = text(record(node['source']), 'value');
   const bindings = Array.isArray(node['specifiers']) ? node['specifiers'] : [];
@@ -250,6 +253,7 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
   for (const error of result.errors)
     issues.push({ name: error.message, offset: error.labels[0]?.start ?? 0 });
   let hasImplementation = false;
+  /** @impure Append parser facts to the captured result and update lexical environments. */
   const walk = (
     node: Node,
     parent: Node,
@@ -335,6 +339,7 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
   };
   walk(record(result.program), {}, '', 0, new Map());
   return {
+    ast: result.program,
     comments: result.comments.map((comment) => ({
       text: comment.value,
       start: comment.start,

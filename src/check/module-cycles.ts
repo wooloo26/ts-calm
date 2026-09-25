@@ -1,5 +1,5 @@
-import { diagnostic } from './diagnostics.ts';
-import type { Diagnostic, ResolvedImport, SourceFile } from './types.ts';
+import { diagnostic } from '#check/diagnostics';
+import type { Diagnostic, ResolvedImport, SourceFile } from '#check/types';
 
 type Edge = Readonly<{ from: string; to: string; target: string; offset: number }>;
 const directory = (path: string): string =>
@@ -38,6 +38,7 @@ export const checkModuleCycles = (
   const modules: string[] = [],
     trail: Edge[] = [],
     diagnostics: Diagnostic[] = [];
+  /** @impure Update the captured directory traversal and diagnostics. */
   const visit = (module: string): void => {
     if (complete.has(module)) return;
     active.set(module, modules.length);

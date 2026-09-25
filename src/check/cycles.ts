@@ -1,5 +1,5 @@
-import { diagnostic } from './diagnostics.ts';
-import type { Diagnostic, ResolvedImport, SourceFile } from './types.ts';
+import { diagnostic } from '#check/diagnostics';
+import type { Diagnostic, ResolvedImport, SourceFile } from '#check/types';
 
 export const checkCycles = (
   files: readonly SourceFile[],
@@ -17,6 +17,7 @@ export const checkCycles = (
     complete = new Set<string>();
   const trail: string[] = [],
     diagnostics: Diagnostic[] = [];
+  /** @impure Update the captured DFS stack and cycle diagnostics. */
   const visit = (file: string): void => {
     if (complete.has(file)) return;
     active.set(file, trail.length);

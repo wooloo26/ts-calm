@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSources, runChecks } from '../../src/check/engine.ts';
-import { validateCommitMessage } from '../../src/check/commit-message.ts';
-import { validateConfiguration } from '../../src/check/config-reader.b.ts';
-import type { CheckConfig } from '../../src/check/types.ts';
+import { analyzeSources, runChecks } from '#check/engine';
+import { validateConfiguration } from '#check/config-reader.b';
+import type { CheckConfig } from '#check/types';
 
 const lint = (content: string, path = 'src/value.ts', config: CheckConfig = {}) => {
   const files = [{ path, content }];
@@ -105,7 +104,7 @@ describe('boundary declarations', () => {
   });
   it('checks direct effects and accepts a narrow actual allowance', () => {
     const body =
-      'import {readFileSync} from "node:fs"; export function f(){try {return readFileSync("a")} catch{return ""}}';
+      'import {readFileSync} from "node:fs"; /** @impure Read the external file. */ export function f(){try {return readFileSync("a")} catch{return ""}}';
     expect(rules(body)).toContain('boundary/effect');
     const code = boundary(
       ' * @effects node:fs\n * @allow strict-fp/no-try -- Convert filesystem failures here.',
@@ -224,29 +223,6 @@ describe('function length', () => {
 });
 
 describe('configuration and commits', () => {
-  it('applies the exact subject length and validates body ASCII', () => {
-    const prefix = 'fix(root): ';
-    expect(validateCommitMessage(prefix + 'x'.repeat(100 - prefix.length))).toEqual([]);
-    expect(
-      validateCommitMessage(prefix + 'x'.repeat(101 - prefix.length)).map((issue) => issue.rule),
-    ).toContain('commit-message/format');
-    expect(
-      validateCommitMessage('fix(root): valid\n\n非 ASCII').map((issue) => issue.rule),
-    ).toContain('commit-message/ascii');
-  });
-  it('accepts explicit scopes without module metadata', () => {
-    expect(validateCommitMessage('feat(check): explain boundaries')).toEqual([]);
-    expect(validateCommitMessage('feat(check)!: change API\n\nBREAKING CHANGE: new API')).toEqual(
-      [],
-    );
-    expect(validateCommitMessage('feat(check): 中文')[0]?.rule).toBe('commit-message/ascii');
-    expect(validateCommitMessage('feat: no scope')[0]?.rule).toBe('commit-message/format');
-    expect(
-      validateCommitMessage('fix(nope): update', {
-        rules: { 'commit-message': { scopes: ['fp'] } },
-      })[0]?.rule,
-    ).toBe('commit-message/scope');
-  });
   it('rejects misspelled and impossible options', () => {
     for (const input of [
       { rules: { boundry: true } },

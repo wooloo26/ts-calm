@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isArray, hasOwn } from '../src/fp/guards.ts';
-import { checkConsumer, run } from './consumer.ts';
+import { isArray, hasOwn } from '#fp/guards';
+import { checkConsumer, run } from '#scripts/consumer';
+import { parseSync } from 'oxc-parser';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const release = join(root, '.local/release');
@@ -38,11 +39,19 @@ if (files.some((path) => !/^(dist|presets|types|docs)\//.test(path) && !allowed.
   throw new Error(`Unexpected packed content: ${files.join(', ')}`);
 for (const path of files) {
   const content = readFileSync(join(root, path), 'utf8');
-  if (
-    content.includes('@local-tx-one-piece') ||
-    /(?:from\s*|import\s*)["']#(?:src|fixtures)/.test(content)
-  )
+  if (content.includes('@local-tx-one-piece'))
     throw new Error(`Unpublished workspace dependency in ${path}`);
+  if (path.startsWith('dist/') && /\.(?:js|ts)$/.test(path)) {
+    const module = parseSync(path, content).module;
+    const imports = [
+      ...module.staticImports.map((entry) => entry.moduleRequest.value),
+      ...module.staticExports.flatMap((group) =>
+        group.entries.flatMap((entry) => (entry.moduleRequest ? [entry.moduleRequest.value] : [])),
+      ),
+    ];
+    if (imports.some((name) => /^#(?:tests|fixtures|scripts)\//.test(name)))
+      throw new Error(`Development-only import in ${path}`);
+  }
 }
 for (const manager of ['npm', 'pnpm'] as const) checkConsumer(tarball, npmCli, pnpmCli, manager);
 writeFileSync(

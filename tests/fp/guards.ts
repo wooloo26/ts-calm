@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { runInNewContext } from 'node:vm';
-import { isArray, isObject, isPlainObject, hasOwn } from '../../src/fp/index.ts';
+import { isArray, isObject, isPlainObject, hasOwn } from '#fp/index';
 
 describe('external value guards', () => {
   it('distinguishes arrays, objects and current-realm plain dictionaries', () => {

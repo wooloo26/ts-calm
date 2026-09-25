@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { capture, captureAsync } from '#src/boundary.ts';
+import { capture, captureAsync } from '#fp/boundary';
 import {
   decodeJson,
   encodeJson,
@@ -12,15 +12,15 @@ import {
   ok,
   some,
   unit,
-} from '#src/index.ts';
-import type { JsonCodec, JsonValue, Unit } from '#src/index.ts';
+} from '#fp/index';
+import type { JsonCodec, JsonValue, Unit } from '#fp/index';
 import {
   invalidJsonFixture,
   missingJsonOutputFixture,
   nullPrototypeFixture,
   raise,
   sparseArrayFixture,
-} from '#fixtures/foundation.ts';
+} from '#fixtures/fp/foundation';
 
 describe('classified external failures', () => {
   test('invokes lazy operations once and preserves known expected failures', async () => {

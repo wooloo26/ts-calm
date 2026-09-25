@@ -1,6 +1,6 @@
-import { diagnostic } from './diagnostics.ts';
-import { strictChecks } from './types.ts';
-import type { AnalyzedFile, Diagnostic } from './types.ts';
+import { diagnostic } from '#check/diagnostics';
+import { strictChecks } from '#check/types';
+import type { AnalyzedFile, Diagnostic } from '#check/types';
 
 type Declaration = Readonly<{ tag: string; value: string; offset: number }>;
 export type BoundaryAnalysis = Readonly<{
@@ -33,6 +33,7 @@ export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
   const diagnostics: Diagnostic[] = [];
   const allowances = new Set<string>();
   const suffix = source.path.endsWith('.b.ts');
+  /** @impure Append a diagnostic to the current analysis result. */
   const report = (name: string, message: string, offset = 0): void => {
     diagnostics.push(diagnostic(source, `boundary/${name}`, message, offset));
   };
@@ -56,7 +57,7 @@ export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
   const observed = new Set(parsed.effects.map((effect) => effect.name));
   const declared = new Set<string>();
   for (const tag of tags) {
-    if (tag.tag === 'boundary') continue;
+    if (tag.tag === 'boundary' || tag.tag === 'impure') continue;
     if (tag.tag === 'effects') {
       if (!tag.value || /\s|\*/.test(tag.value))
         report('declaration', '@effects requires one exact module or API name.', tag.offset);

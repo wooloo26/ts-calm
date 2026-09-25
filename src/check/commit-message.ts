@@ -1,5 +1,5 @@
-import { diagnostic } from './diagnostics.ts';
-import type { Diagnostic, CheckConfig } from './types.ts';
+import { diagnostic } from '#check/diagnostics';
+import type { Diagnostic, CheckConfig } from '#check/types';
 
 export const validateCommitMessage = (
   message: string,
@@ -23,7 +23,7 @@ export const validateCommitMessage = (
     );
   const first = message.split(/\r?\n/)[0] ?? '';
   const match =
-    /^(feat|fix|refactor|test|docs|chore|build|ci|perf|revert)\(([a-z][a-z0-9-]*)\)(!)?: (\S.*)$/.exec(
+    /^([a-z][a-z0-9-]*) - (add|fix|update|remove|refactor|test|document|build|optimize|revert|release) (\S.*)$/.exec(
       first,
     );
   if (!match || first.length > (options.maxLength ?? 100))
@@ -31,10 +31,10 @@ export const validateCommitMessage = (
       diagnostic(
         source,
         'commit-message/format',
-        `Expected type(scope): description, at most ${options.maxLength ?? 100} characters.`,
+        `Expected scope - verb description, at most ${options.maxLength ?? 100} characters.`,
       ),
     );
-  else if (options.scopes && !options.scopes.includes(match[2] ?? ''))
+  else if (options.scopes && !options.scopes.includes(match[1] ?? ''))
     diagnostics.push(
       diagnostic(source, 'commit-message/scope', `Allowed scopes: ${options.scopes.join(', ')}.`),
     );

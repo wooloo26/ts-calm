@@ -5,13 +5,15 @@
  * @allow strict-fp/no-assertion -- Cast only after validating every supported configuration field.
  * @allow strict-fp/no-throw -- Invalid configuration is an operational failure handled by the CLI.
  * @allow strict-fp/no-delete -- Reload the selected config instead of retaining a stale require cache entry.
+ * @allow strict-fp/no-try -- Always remove this invocation's temporary synchronous module resolver hook.
  */
 import { existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, registerHooks } from 'node:module';
 import { join } from 'node:path';
-import { strictChecks } from './types.ts';
-import type { CheckConfig } from './types.ts';
-import { isArray, isPlainObject } from '../fp/guards.ts';
+import { strictChecks } from '#check/types';
+import type { CheckConfig } from '#check/types';
+import { isArray, isPlainObject } from '#fp/guards';
+import { compilerConditions } from '#check/compiler-options.b';
 
 const object = (value: unknown): Record<string, unknown> => {
   if (!isPlainObject(value))
@@ -33,11 +35,12 @@ const ruleNames = [
   'no-file-cycles',
   'no-module-cycles',
   'strict-fp',
+  'purity',
 ];
 
 const validateRuleOptions = (name: string, value: unknown): void => {
   if (typeof value === 'boolean') return;
-  if (name === 'boundary' || name === 'no-file-cycles' || name === 'no-module-cycles')
+  if (['boundary', 'no-file-cycles', 'no-module-cycles', 'purity'].includes(name))
     throw new Error(`${name} must be a boolean.`);
   const options = object(value);
   const allowed =
@@ -89,12 +92,23 @@ export const validateConfiguration = (value: unknown): CheckConfig => {
   return config as CheckConfig;
 };
 
+/** @impure Read and execute trusted project configuration. */
 export const loadConfiguration = (root: string): CheckConfig => {
   const path = join(root, 'ts-calm.config.ts');
   if (!existsSync(path)) return {};
   const load = createRequire(import.meta.url);
   delete load.cache[path];
-  const loaded: unknown = load(path);
-  const module = object(loaded);
-  return validateConfiguration(module['default'] ?? module);
+  const conditions = compilerConditions(root, 'ts-calm.config.ts', new Map());
+  const hooks = registerHooks({
+    resolve(specifier, context, next) {
+      return next(specifier, { ...context, conditions: [...context.conditions, ...conditions] });
+    },
+  });
+  try {
+    const loaded: unknown = load(path);
+    const module = object(loaded);
+    return validateConfiguration(module['default'] ?? module);
+  } finally {
+    hooks.deregister();
+  }
 };

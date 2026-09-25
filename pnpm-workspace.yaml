@@ -2,3 +2,8 @@ allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
   - '@types/node@24.13.6'
+packageExtensions:
+  # Only Stryker's dev-only config preprocessor needs the pre-7 compiler API.
+  '@stryker-mutator/core@10.0.0':
+    dependencies:
+      typescript: '6.0.3'

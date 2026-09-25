@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { all, err, filter, ok } from '#src/index.ts';
+import { all, err, filter, ok } from '#fp/index';
 
 describe('named independent validation', () => {
   it('collects named results without requiring array iteration', () => {

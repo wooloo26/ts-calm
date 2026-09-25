@@ -1,6 +1,6 @@
 import { expect, expectTypeOf, it } from 'vitest';
-import { err, get, getError, isErr, isOk, ok, traverseAsync } from '../../src/fp/index.ts';
-import type { Result } from '../../src/fp/index.ts';
+import { err, get, getError, isErr, isOk, ok, traverseAsync } from '#fp/index';
+import type { Result } from '#fp/index';
 
 it('awaits one operation at a time and preserves order without mutating the input', async () => {
   const input = Object.freeze([1, 2, 3]);

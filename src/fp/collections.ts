@@ -1,7 +1,7 @@
-import { err, get, getError, isErr, isSome, ok, none } from './containers.ts';
-import type { Err, Ok, Option, Result } from './containers.ts';
-import type { NonEmptyReadonlyArray } from './contracts.ts';
-import { nonEmpty, ownEntries } from './values.b.ts';
+import { err, get, getError, isErr, isSome, ok, none } from '#fp/containers';
+import type { Err, Ok, Option, Result } from '#fp/containers';
+import type { NonEmptyReadonlyArray } from '#fp/contracts';
+import { nonEmpty, ownEntries } from '#fp/values.b';
 
 export const isUniqueBy = <Value, Key extends PropertyKey>(
   values: readonly Value[],

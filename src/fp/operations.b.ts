@@ -2,8 +2,8 @@
  * @boundary Bridge overload correlations that TypeScript cannot retain in the shared implementation.
  * @allow strict-fp/no-assertion -- Overloads correlate handlers and container variants without coercing payloads.
  */
-import { get, getError, isOk, isResult, isSome } from './containers.ts';
-import type { AsyncResult, Err, None, Ok, Option, Result, Some } from './containers.ts';
+import { get, getError, isOk, isResult, isSome } from '#fp/containers';
+import type { AsyncResult, Err, None, Ok, Option, Result, Some } from '#fp/containers';
 
 export type ResultCases<Value, Problem, Success, Failure> = Readonly<{
   ok: (value: Value) => Success;

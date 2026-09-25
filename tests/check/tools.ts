@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkProject, checkLint } from '../../src/check/project.ts';
-import { checkStaged } from '../../src/check/staged.b.ts';
-import { formatProject, typecheckProject } from '../../src/check/tools.b.ts';
-import { initializeProject } from '../../src/check/init.b.ts';
-import { explainRule } from '../../src/check/rule-help.ts';
-import { withProject, write, initializeGit, git } from '../../fixtures/project.ts';
+import { checkProject, checkLint } from '#check/project';
+import { checkStaged } from '#check/staged.b';
+import { formatProject, typecheckProject } from '#check/tools.b';
+import { initializeProject } from '#check/init.b';
+import { explainRule } from '#check/rule-help';
+import { withProject, write, initializeGit, git } from '#fixtures/project';
 
 const tsconfig = JSON.stringify({
   compilerOptions: { strict: true, target: 'ES2024', module: 'NodeNext', types: [] },

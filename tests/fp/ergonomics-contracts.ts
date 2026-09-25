@@ -17,7 +17,7 @@ import {
   some,
   transpose,
   validateAll,
-} from '#src/index.ts';
+} from '#fp/index';
 import type {
   AsyncResult,
   Brand,
@@ -33,9 +33,9 @@ import type {
   Option,
   Result,
   Some,
-} from '#src/index.ts';
-import { capture, captureResult, captureResultAsync } from '#src/boundary.ts';
-import type { Fault } from '#src/boundary.ts';
+} from '#fp/index';
+import { capture, captureResult, captureResultAsync } from '#fp/boundary';
+import type { Fault } from '#fp/boundary';
 
 test('checked constructors and codecs infer vendor-independent values', () => {
   const stringDecoder: Decoder<string, 'not-string'> = (input) =>

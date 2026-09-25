@@ -35,8 +35,17 @@
   "type": "module",
   "types": "./dist/fp/index.d.ts",
   "imports": {
-    "#src/*": "./src/fp/*",
-    "#fixtures/*": "./fixtures/fp/*"
+    "#fp/*": {
+      "ts-calm-source": "./src/fp/*.ts",
+      "default": "./dist/fp/*.js"
+    },
+    "#check/*": {
+      "ts-calm-source": "./src/check/*.ts",
+      "default": "./dist/check/*.js"
+    },
+    "#tests/*": "./tests/*.ts",
+    "#fixtures/*": "./fixtures/*.ts",
+    "#scripts/*": "./scripts/*.ts"
   },
   "exports": {
     ".": {
@@ -66,17 +75,21 @@
     }
   },
   "scripts": {
-    "build": "node scripts/build.ts",
+    "build": "node --conditions=ts-calm-source scripts/build.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "node --conditions=ts-calm-source node_modules/vitest/vitest.mjs run",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "check": "node src/check/cli.b.ts check",
+    "check": "node --conditions=ts-calm-source src/check/cli.b.ts check",
     "verify": "pnpm check && pnpm test && pnpm build",
-    "test:package": "node scripts/package-smoke.ts",
+    "test:package": "node --conditions=ts-calm-source scripts/package-smoke.ts",
     "prepack": "pnpm build",
-    "lint": "node src/check/cli.b.ts lint",
-    "docs": "node scripts/docs.ts && oxfmt --write docs/rules.md"
+    "lint": "node --conditions=ts-calm-source src/check/cli.b.ts lint",
+    "docs": "node --conditions=ts-calm-source scripts/docs.ts && oxfmt --write docs/rules.md",
+    "test:template": "node --conditions=ts-calm-source scripts/workspace-smoke.ts",
+    "test:coverage": "node --conditions=ts-calm-source node_modules/vitest/vitest.mjs run --coverage",
+    "test:mutation": "node --conditions=ts-calm-source scripts/mutation.ts",
+    "bench": "node --conditions=ts-calm-source node_modules/vitest/vitest.mjs bench --run --config vitest.bench.config.ts"
   },
   "dependencies": {
     "@types/node": "24.13.6",
@@ -88,6 +101,9 @@
     "typescript": "7.0.2"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "5.0.1",
     "fast-check": "4.10.1",
     "vitest": "5.0.1"
   },

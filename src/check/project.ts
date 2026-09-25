@@ -1,7 +1,8 @@
-import { checkSourceProject } from './sources.b.ts';
-import { formatProject, lintProject, typecheckProject } from './tools.b.ts';
-import type { CheckConfig, Diagnostic } from './types.ts';
+import { checkSourceProject } from '#check/sources.b';
+import { formatProject, lintProject, typecheckProject } from '#check/tools.b';
+import type { CheckConfig, Diagnostic } from '#check/types';
 
+/** @impure Read project inputs and execute all pinned static tools. */
 export const checkProject = (root: string, config?: CheckConfig): readonly Diagnostic[] => [
   ...formatProject(root),
   ...lintProject(root),
@@ -9,6 +10,7 @@ export const checkProject = (root: string, config?: CheckConfig): readonly Diagn
   ...checkSourceProject(root, config),
 ];
 
+/** @impure Read project inputs and execute the native linter. */
 export const checkLint = (root: string, config?: CheckConfig): readonly Diagnostic[] => [
   ...lintProject(root),
   ...checkSourceProject(root, config),

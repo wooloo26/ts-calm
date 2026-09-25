@@ -1,5 +1,15 @@
 {
   "extends": "./presets/tsconfig.node.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "fixtures/**/*.ts", "scripts/**/*.ts", "*.ts"]
+  "compilerOptions": {
+    "types": ["node"],
+    "customConditions": ["ts-calm-source"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "fixtures/**/*.ts",
+    "scripts/**/*.ts",
+    "*.ts",
+    "benchmarks/**/*.ts"
+  ]
 }

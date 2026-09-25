@@ -24,6 +24,7 @@ const source = `/**
 import {ok, get, map, isArray, isObject, isPlainObject, hasOwn, traverseAsync} from 'ts-calm';
 import {capture} from 'ts-calm/boundary';
 export const value = get(map(ok(3), n => n + 1));
+/** @impure Read the host runtime version. */
 export const host = () => process.version;
 export const array = (input:unknown) => isArray(input) ? input.length : 0;
 export const object = (input:unknown) => isObject(input);
@@ -60,7 +61,7 @@ assert.equal(isPlainObject({}),true);
 assert.equal(hasOwn({x:1},'x'),true);
 const values=await traverseAsync([1,2],n=>ok(n*2));
 assert.deepEqual(isOk(values)&&get(values),[2,4]);
-assert.deepEqual(validateCommitMessage('feat(fp): consume installed package'),[]);
+assert.deepEqual(validateCommitMessage('fp - add consume installed package'),[]);
 assert.equal(runChecks({files:[{path:'src/value.ts',content:'export const value=null;'}]})[0].rule,'strict-fp/no-null');
 assert.deepEqual(checkProject(process.cwd()),[]);
 `;

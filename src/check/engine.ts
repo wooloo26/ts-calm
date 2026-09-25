@@ -1,12 +1,13 @@
-import { parseSource } from './parser.b.ts';
-import { analyzeBoundary } from './boundary.ts';
-import { checkFunctionLength } from './function-length.ts';
-import { checkCycles } from './cycles.ts';
-import { checkModuleCycles } from './module-cycles.ts';
-import { helpForRule, documentationFor } from './rule-help.ts';
-import { enabled, selected } from './configuration.ts';
-import { diagnostic } from './diagnostics.ts';
-import type { AnalyzedFile, Diagnostic, CheckConfig, CheckInput } from './types.ts';
+import { parseSource } from '#check/parser.b';
+import { analyzeBoundary } from '#check/boundary';
+import { checkFunctionLength } from '#check/function-length';
+import { checkCycles } from '#check/cycles';
+import { checkModuleCycles } from '#check/module-cycles';
+import { checkPurity } from '#check/purity';
+import { helpForRule, documentationFor } from '#check/rule-help';
+import { enabled, selected } from '#check/configuration';
+import { diagnostic } from '#check/diagnostics';
+import type { AnalyzedFile, Diagnostic, CheckConfig, CheckInput } from '#check/types';
 
 export const analyzeSources = (
   input: CheckInput,
@@ -49,6 +50,7 @@ const checkFile = (file: AnalyzedFile, config: CheckConfig): readonly Diagnostic
 export const runChecks = (input: CheckInput, config: CheckConfig = {}): readonly Diagnostic[] => {
   const analyzed = analyzeSources(input, config);
   const diagnostics = analyzed.flatMap((file) => checkFile(file, config));
+  diagnostics.push(...checkPurity(analyzed, input.imports ?? [], config));
   const checked = new Set(analyzed.map((file) => file.source.path));
   for (const file of analyzed)
     for (const imported of file.parsed.imports)

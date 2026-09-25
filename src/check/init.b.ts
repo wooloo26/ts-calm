@@ -5,8 +5,13 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isPlainObject } from '../fp/guards.ts';
-import { formatConfigNames, lintConfigNames, findConfiguration, formatProject } from './tools.b.ts';
+import { isPlainObject } from '#fp/guards';
+import {
+  formatConfigNames,
+  lintConfigNames,
+  findConfiguration,
+  formatProject,
+} from '#check/tools.b';
 
 export type InitResult = Readonly<{
   created: readonly string[];
@@ -16,6 +21,7 @@ export type InitResult = Readonly<{
 const pretty = (value: unknown): string =>
   JSON.stringify(value, (_key, item: unknown) => item, 2) + '\n';
 
+/** @impure Create missing project configuration and format the created files. */
 export const initializeProject = (root: string): InitResult => {
   const created: string[] = [],
     updated: string[] = [],

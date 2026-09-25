@@ -2,6 +2,16 @@
 
 # Rule guide
 
+## purity
+
+Production functions follow a pure-by-default convention. Declare known I/O, time, randomness or external state effects with a leading @impure reason. Local construction and loops are allowed; project calls propagate known effects, while private temporary mutations stay local. Higher-order helpers depend on their callbacks. This bounded analysis does not prove unknown third-party calls, getters, proxies or dynamic dispatch pure. The annotation never bypasses boundary or other checks.
+
+```ts
+/** @impure Read the system clock. */
+export const now = () => Date.now();
+// Direct host operations also require a documented .b.ts boundary.
+```
+
 ## strict-fp-no-try
 
 Prefer capture/captureAsync around the external operation. If it already returns Result, use captureResult/captureResultAsync. Keep real I/O in .b.ts. Do not mechanically rewrite try/finally cleanup.
@@ -154,8 +164,8 @@ Split by responsibility above 80 effective lines; above 150 is an error. A neces
 
 ## commit-message
 
-Use type(scope): description, ASCII throughout, with a subject no longer than 100 characters.
+Use scope - verb description, ASCII throughout, with a subject no longer than 100 characters.
 
 ```ts
-feat(fp): add safe guards
+fp - add add safe guards
 ```

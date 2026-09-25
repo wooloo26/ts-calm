@@ -2,9 +2,9 @@
  * @boundary Convert dependency exceptions and classifier defects into explicit Result failures.
  * @allow strict-fp/no-try -- Catch only at the supplied operation and classifier boundary.
  */
-import { err, get, isErr, isSome, none, ok } from './containers.ts';
-import type { AsyncResult, Option, Result } from './containers.ts';
-import type { Synchronous } from './contracts.ts';
+import { err, get, isErr, isSome, none, ok } from '#fp/containers';
+import type { AsyncResult, Option, Result } from '#fp/containers';
+import type { Synchronous } from '#fp/contracts';
 
 export type Fault = Readonly<{
   code: 'unexpected-fault';

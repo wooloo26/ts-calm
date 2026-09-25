@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { ruleHelpEntries } from '../src/check/rule-help.ts';
+import { ruleHelpEntries } from '#check/rule-help';
 
 const sections = Object.entries(ruleHelpEntries).map(
   ([rule, help]) =>

@@ -1,4 +1,4 @@
-import type { Ok, Result } from './containers.ts';
+import type { Ok, Result } from '#fp/containers';
 
 export type Synchronous<Value> = Value &
   (Extract<Value, PromiseLike<unknown>> extends never ? unknown : never);

@@ -19,10 +19,10 @@ import {
   some,
   toResult,
   traverse,
-} from '#src/index.ts';
-import type { AsyncResult, Err, None, Ok, Option, Result, Some, Unit } from '#src/index.ts';
-import { capture, captureAsync } from '#src/boundary.ts';
-import type { Fault } from '#src/boundary.ts';
+} from '#fp/index';
+import type { AsyncResult, Err, None, Ok, Option, Result, Some, Unit } from '#fp/index';
+import { capture, captureAsync } from '#fp/boundary';
+import type { Fault } from '#fp/boundary';
 
 test('constructors preserve literals without assertions or public fields', () => {
   expectTypeOf(ok({ revision: 1 })).toEqualTypeOf<Ok<Readonly<{ revision: 1 }>>>();

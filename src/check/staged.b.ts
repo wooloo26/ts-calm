@@ -18,12 +18,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { loadConfiguration } from './config-reader.b.ts';
-import { checkProject } from './project.ts';
-import { hasInstalledDependencies } from './resolver.b.ts';
-import { validateCommitMessage } from './commit-message.ts';
-import type { Diagnostic } from './types.ts';
+import { loadConfiguration } from '#check/config-reader.b';
+import { checkProject } from '#check/project';
+import { hasInstalledDependencies } from '#check/resolver.b';
+import { validateCommitMessage } from '#check/commit-message';
+import type { Diagnostic } from '#check/types';
 
+/** @impure Execute Git and collect its output. */
 const git = (root: string, args: readonly string[]): Buffer => {
   const result = spawnSync('git', ['-C', root, ...args], {
     maxBuffer: 128 * 1024 * 1024,
@@ -34,6 +35,7 @@ const git = (root: string, args: readonly string[]): Buffer => {
   return result.stdout;
 };
 
+/** @impure Read Git objects and write this invocation's snapshot. */
 const materialize = (root: string, temporary: string, index: string): void => {
   for (const entry of index.split('\0').filter(Boolean)) {
     const match = /^(\d+) ([0-9a-f]+) (\d)\t([\s\S]+)$/.exec(entry);
@@ -64,6 +66,7 @@ const materialize = (root: string, temporary: string, index: string): void => {
   }
 };
 
+/** @impure Create and remove a temporary index snapshot while invoking the inspection. */
 export const withStagedProject = <Value>(
   root: string,
   inspect: (snapshotRoot: string) => Value,
@@ -88,8 +91,10 @@ export const withStagedProject = <Value>(
   }
 };
 
+/** @impure Inspect the Git index using external static tools. */
 export const checkStaged = (root: string): readonly Diagnostic[] =>
   withStagedProject(root, checkProject);
+/** @impure Read the staged commit policy and validate the supplied message. */
 export const checkStagedMessage = (root: string, message: string): readonly Diagnostic[] =>
   withStagedProject(root, (snapshot) =>
     validateCommitMessage(message, loadConfiguration(snapshot)),

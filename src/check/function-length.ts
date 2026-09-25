@@ -3,9 +3,9 @@ import {
   maskedSource,
   mentionsAllowance,
   parseAllowance,
-} from './function-lines.ts';
-import { diagnostic } from './diagnostics.ts';
-import type { AnalyzedFile, Diagnostic, CheckConfig } from './types.ts';
+} from '#check/function-lines';
+import { diagnostic } from '#check/diagnostics';
+import type { AnalyzedFile, Diagnostic, CheckConfig } from '#check/types';
 
 export const checkFunctionLength = (
   { source, parsed }: AnalyzedFile,
@@ -18,6 +18,7 @@ export const checkFunctionLength = (
   const masked = maskedSource(source.content, parsed.comments);
   const diagnostics: Diagnostic[] = [];
   const allowances = new Map<number, number>();
+  /** @impure Append a diagnostic to the current function analysis. */
   const report = (name: string, message: string, offset: number): void => {
     diagnostics.push(diagnostic(source, `function-length/${name}`, message, offset));
   };

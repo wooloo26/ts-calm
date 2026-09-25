@@ -1,4 +1,4 @@
-import type { CheckConfig, RuleName } from './types.ts';
+import type { CheckConfig, RuleName } from '#check/types';
 
 export const defineConfig = (config: CheckConfig): CheckConfig => config;
 
@@ -33,12 +33,12 @@ export const selected = (path: string, config: CheckConfig): boolean =>
   );
 
 const supportFile = (path: string): boolean =>
-  /(?:^|\/)(?:tests?|__tests__|fixtures?|scripts)(?:\/|$)/.test(path) ||
+  /(?:^|\/)(?:tests?|__tests__|fixtures?|scripts|benchmarks)(?:\/|$)/.test(path) ||
   /(?:\.(?:test|spec|config)\.[cm]?tsx?$|(?:^|\/)ts-calm\.config\.ts$)/.test(path);
 
 export const enabled = (rule: RuleName, path: string, config: CheckConfig): boolean => {
   let active = config.rules?.[rule] !== false;
-  if ((rule === 'boundary' || rule === 'strict-fp') && supportFile(path)) active = false;
+  if (['boundary', 'strict-fp', 'purity'].includes(rule) && supportFile(path)) active = false;
   for (const override of config.overrides ?? [])
     if (override.files.some((pattern) => matches(path, pattern)) && rule in override.rules)
       active = Object.entries(override.rules).find(([name]) => name === rule)?.[1] !== false;

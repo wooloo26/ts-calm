@@ -28,9 +28,9 @@ import {
   toOptionData,
   toResultData,
   unit,
-} from '#src/index.ts';
-import type { Option, Result } from '#src/index.ts';
-import { structuralLookalike } from '#fixtures/foundation.ts';
+} from '#fp/index';
+import type { Option, Result } from '#fp/index';
+import { structuralLookalike } from '#fixtures/fp/foundation';
 
 describe('opaque functional containers', () => {
   test('uses Unit for a successful operation without a value', () => {

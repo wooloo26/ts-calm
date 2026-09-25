@@ -10,9 +10,9 @@ import {
   none,
   ok,
   some,
-} from './containers.ts';
-import type { AsyncResult, Err, None, Ok, Option, Result, Some } from './containers.ts';
-import type { Synchronous } from './contracts.ts';
+} from '#fp/containers';
+import type { AsyncResult, Err, None, Ok, Option, Result, Some } from '#fp/containers';
+import type { Synchronous } from '#fp/contracts';
 
 export function map<Value, Output>(
   value: Ok<Value>,

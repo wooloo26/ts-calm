@@ -1,5 +1,11 @@
 export type RuleHelp = Readonly<{ summary: string; example: string }>;
 export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
+  purity: {
+    summary:
+      'Production functions follow a pure-by-default convention. Declare known I/O, time, randomness or external state effects with a leading @impure reason. Local construction and loops are allowed; project calls propagate known effects, while private temporary mutations stay local. Higher-order helpers depend on their callbacks. This bounded analysis does not prove unknown third-party calls, getters, proxies or dynamic dispatch pure. The annotation never bypasses boundary or other checks.',
+    example:
+      '/** @impure Read the system clock. */\nexport const now = () => Date.now();\n// Direct host operations also require a documented .b.ts boundary.',
+  },
   'strict-fp/no-try': {
     summary:
       'Prefer capture/captureAsync around the external operation. If it already returns Result, use captureResult/captureResultAsync. Keep real I/O in .b.ts. Do not mechanically rewrite try/finally cleanup.',
@@ -90,8 +96,8 @@ export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
   },
   'commit-message': {
     summary:
-      'Use type(scope): description, ASCII throughout, with a subject no longer than 100 characters.',
-    example: 'feat(fp): add safe guards',
+      'Use scope - verb description, ASCII throughout, with a subject no longer than 100 characters.',
+    example: 'fp - add add safe guards',
   },
 };
 

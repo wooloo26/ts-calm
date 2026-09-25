@@ -1,5 +1,5 @@
-import { err, get, getError, isOk, isSome, none, ok, some } from './containers.ts';
-import type { Option, Result } from './containers.ts';
+import { err, get, getError, isOk, isSome, none, ok, some } from '#fp/containers';
+import type { Option, Result } from '#fp/containers';
 
 export type ResultData<Value, Problem> =
   | Readonly<{ status: 'ok'; value: Value }>

@@ -4,7 +4,9 @@ export type RuleName =
   | 'boundary'
   | 'no-file-cycles'
   | 'no-module-cycles'
-  | 'strict-fp';
+  | 'strict-fp'
+  | 'purity';
+// Purity is a bounded source convention, not a general proof.
 
 export const strictChecks = [
   'no-throw',
@@ -46,6 +48,7 @@ export type CheckConfig = Readonly<{
     'no-file-cycles'?: boolean;
     'no-module-cycles'?: boolean;
     'strict-fp'?: boolean | Readonly<Partial<Record<StrictCheck, boolean>>>;
+    purity?: boolean;
   }>;
   overrides?: readonly Readonly<{
     files: readonly string[];
@@ -66,6 +69,7 @@ export type FunctionFact = Readonly<{
 export type ImportFact = Readonly<{ specifier: string; offset: number; typeOnly: boolean }>;
 export type Fact = Readonly<{ name: string; offset: number }>;
 export type ParsedSource = Readonly<{
+  ast?: unknown;
   comments: readonly SourceComment[];
   functions: readonly FunctionFact[];
   imports: readonly ImportFact[];
