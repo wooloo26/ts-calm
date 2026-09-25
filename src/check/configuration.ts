@@ -1,6 +1,6 @@
-import type { GateConfiguration, RuleName } from './types.ts';
+import type { CheckConfig, RuleName } from './types.ts';
 
-export const defineConfig = (config: GateConfiguration): GateConfiguration => config;
+export const defineConfig = (config: CheckConfig): CheckConfig => config;
 
 /** Small path glob matcher: *, **, and ?; always use forward slashes. */
 export const matches = (path: string, pattern: string): boolean => {
@@ -15,17 +15,17 @@ export const matches = (path: string, pattern: string): boolean => {
       } else expression += '.*';
     } else if (char === '*') expression += '[^/]*';
     else if (char === '?') expression += '[^/]';
-    else expression += char.replace(/[\\^$+?.()|{}\[\]]/g, '\\$&');
+    else expression += char.replace(/[\\^$+?.()|{}[\]]/g, '\\$&');
   }
   return new RegExp(`${expression}$`).test(path.replaceAll('\\', '/'));
 };
 
-export const excluded = (path: string, config: GateConfiguration): boolean =>
+export const excluded = (path: string, config: CheckConfig): boolean =>
   /(?:^|\/)(?:node_modules|dist|build|coverage|\.git|\.local)(?:\/|$)/.test(path) ||
   /\.d\.[cm]?ts$/.test(path) ||
   (config.ignores ?? []).some((pattern) => matches(path, pattern));
 
-export const selected = (path: string, config: GateConfiguration): boolean =>
+export const selected = (path: string, config: CheckConfig): boolean =>
   /\.[cm]?tsx?$/.test(path) &&
   !excluded(path, config) &&
   (config.files ?? ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts']).some((pattern) =>
@@ -34,9 +34,9 @@ export const selected = (path: string, config: GateConfiguration): boolean =>
 
 const supportFile = (path: string): boolean =>
   /(?:^|\/)(?:tests?|__tests__|fixtures?|scripts)(?:\/|$)/.test(path) ||
-  /(?:\.(?:test|spec|config)\.[cm]?tsx?$|(?:^|\/)gate\.config\.ts$)/.test(path);
+  /(?:\.(?:test|spec|config)\.[cm]?tsx?$|(?:^|\/)ts-calm\.config\.ts$)/.test(path);
 
-export const enabled = (rule: RuleName, path: string, config: GateConfiguration): boolean => {
+export const enabled = (rule: RuleName, path: string, config: CheckConfig): boolean => {
   let active = config.rules?.[rule] !== false;
   if ((rule === 'boundary' || rule === 'strict-fp') && supportFile(path)) active = false;
   for (const override of config.overrides ?? [])

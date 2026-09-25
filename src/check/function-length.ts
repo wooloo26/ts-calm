@@ -5,11 +5,11 @@ import {
   parseAllowance,
 } from './function-lines.ts';
 import { diagnostic } from './diagnostics.ts';
-import type { AnalyzedFile, Diagnostic, GateConfiguration } from './types.ts';
+import type { AnalyzedFile, Diagnostic, CheckConfig } from './types.ts';
 
 export const checkFunctionLength = (
   { source, parsed }: AnalyzedFile,
-  config: GateConfiguration = {},
+  config: CheckConfig = {},
 ): readonly Diagnostic[] => {
   const setting = config.rules?.['function-length'];
   const options = typeof setting === 'object' ? setting : {};
@@ -39,7 +39,7 @@ export const checkFunctionLength = (
     if (allowance.target !== 'function-length' || !allowance.reason) {
       report(
         'allow-invalid',
-        'Use gate-allow-next-function function-length -- concrete reason.',
+        'Use calm-allow-next-function function-length -- concrete reason.',
         comment.start,
       );
       valid = false;

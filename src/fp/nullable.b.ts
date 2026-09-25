@@ -13,5 +13,9 @@ import type { Option } from './containers.ts';
 export const isNonNullable = <Value>(value: Value): value is NonNullable<Value> =>
   value !== null && value !== undefined;
 
+/**
+ * Convert external absence to Option; preserve 0, false and ''. Use match/getOrElse/toResult afterward.
+ * @see https://github.com/wooloo26/ts-calm/blob/main/docs/rules.md#strict-fp-no-null
+ */
 export const fromNullable = <Value>(value: Value): Option<NonNullable<Value>> =>
   isNonNullable(value) ? some(value) : none();

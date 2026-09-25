@@ -1,9 +1,9 @@
 import { diagnostic } from './diagnostics.ts';
-import type { Diagnostic, GateConfiguration } from './types.ts';
+import type { Diagnostic, CheckConfig } from './types.ts';
 
 export const validateCommitMessage = (
   message: string,
-  config: GateConfiguration = {},
+  config: CheckConfig = {},
   file = 'COMMIT_EDITMSG',
 ): readonly Diagnostic[] => {
   const setting = config.rules?.['commit-message'];
@@ -11,7 +11,7 @@ export const validateCommitMessage = (
   const options = typeof setting === 'object' ? setting : {};
   const source = { path: file, content: message };
   const diagnostics: Diagnostic[] = [];
-  const offset = [...message].findIndex((character) => character.charCodeAt(0) > 127);
+  const offset = message.split('').findIndex((character) => character.charCodeAt(0) > 127);
   if (options.ascii !== false && offset >= 0)
     diagnostics.push(
       diagnostic(

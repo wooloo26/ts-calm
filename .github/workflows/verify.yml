@@ -29,14 +29,14 @@ jobs:
       - run: pnpm verify
       - run: pnpm test:package
       - name: Check committed sources through the index
-        run: node dist/gates/cli.b.js check --staged
+        run: node dist/check/cli.b.js check --staged
       - name: Check the commit message
         shell: bash
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           git log -1 --format=%B "$COMMIT_SHA" > .local/commit-message
-          node dist/gates/cli.b.js commit-message --file .local/commit-message
+          node dist/check/cli.b.js commit-message --file .local/commit-message
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: package-${{ matrix.os }}

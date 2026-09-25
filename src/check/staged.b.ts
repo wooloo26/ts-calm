@@ -19,7 +19,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { loadConfiguration } from './config-reader.b.ts';
-import { checkProject } from './project.b.ts';
+import { checkProject } from './project.ts';
 import { hasInstalledDependencies } from './resolver.b.ts';
 import { validateCommitMessage } from './commit-message.ts';
 import type { Diagnostic } from './types.ts';
@@ -70,7 +70,7 @@ export const withStagedProject = <Value>(
 ): Value => {
   const repository = git(root, ['rev-parse', '--show-toplevel']).toString('utf8').trim();
   const before = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
-  const temporary = mkdtempSync(join(tmpdir(), 'fp-gates-staged-'));
+  const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-staged-'));
   try {
     materialize(repository, temporary, before);
     if (hasInstalledDependencies(repository))

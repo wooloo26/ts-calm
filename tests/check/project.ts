@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkProject } from '../../src/gates/project.b.ts';
+import { checkSourceProject as checkProject } from '../../src/check/sources.b.ts';
 import { linkDependencies, withProject } from '../../fixtures/project.ts';
 
 const relaxed = { rules: { 'strict-fp': false, boundary: false } } as const;
@@ -123,7 +123,7 @@ describe('project import graph', () => {
     );
   });
   it('does not traverse installed external dependencies', () => {
-    withProject({ 'src/a.ts': 'import {ok} from "fp-gates"; export const a=ok(1);' }, (root) => {
+    withProject({ 'src/a.ts': 'import {ok} from "ts-calm"; export const a=ok(1);' }, (root) => {
       // An uninstalled dependency is an actionable resolution failure.
       expect(checkProject(root).map((issue) => issue.rule)).toContain('imports/resolve');
     });
@@ -141,12 +141,12 @@ describe('project import graph', () => {
   it('loads a checked TypeScript configuration', () => {
     withProject(
       {
-        'gate.config.ts': 'export default {rules:{"strict-fp":false}}',
+        'ts-calm.config.ts': 'export default {rules:{"strict-fp":false}}',
         'src/a.ts': 'export const f=()=>null;',
       },
       (root) => expect(checkProject(root)).toEqual([]),
     );
-    withProject({ 'gate.config.ts': 'export default {rules:{boundry:false}}' }, (root) =>
+    withProject({ 'ts-calm.config.ts': 'export default {rules:{boundry:false}}' }, (root) =>
       expect(() => checkProject(root)).toThrow('boundry'),
     );
   });

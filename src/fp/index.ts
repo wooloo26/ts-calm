@@ -24,6 +24,7 @@ export {
   mapError,
   toResult,
   traverse,
+  traverseAsync,
 } from './operations.ts';
 export { all, validateAll, filterMap, findMap, isUniqueBy } from './collections.ts';
 export { flatten, transpose } from './nested.ts';
@@ -39,3 +40,5 @@ export { fromOptionData, fromResultData, toOptionData, toResultData } from './da
 export type { OptionData, ResultData } from './data.ts';
 export { decodeJson, encodeJson, formatDiagnostic } from './json.b.ts';
 export type { JsonCodec, JsonIssue, JsonValue } from './json.b.ts';
+export { isArray, isObject, isPlainObject, hasOwn } from './guards.ts';
+export type { OwnProperty } from './guards.ts';

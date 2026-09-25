@@ -1,7 +1,7 @@
 {
-  "name": "fp-gates",
+  "name": "ts-calm",
   "version": "0.1.0",
-  "description": "Functional TypeScript primitives and small, explicit architecture gates.",
+  "description": "Calm defaults, functional values and a complete TypeScript check command.",
   "keywords": [
     "architecture",
     "boundary",
@@ -10,22 +10,27 @@
     "result",
     "typescript"
   ],
-  "homepage": "https://github.com/wooloo26/fp-gates#readme",
-  "bugs": "https://github.com/wooloo26/fp-gates/issues",
+  "homepage": "https://github.com/wooloo26/ts-calm#readme",
+  "bugs": "https://github.com/wooloo26/ts-calm/issues",
   "license": "MIT",
   "author": "wooloo26",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wooloo26/fp-gates.git"
+    "url": "git+https://github.com/wooloo26/ts-calm.git"
   },
   "bin": {
-    "fp-gates": "./dist/gates/cli.b.js"
+    "ts-calm": "./dist/check/cli.b.js"
   },
   "files": [
     "dist",
     "README.md",
     "README.zh-CN.md",
-    "LICENSE"
+    "LICENSE",
+    "presets",
+    "types",
+    ".oxlintrc.json",
+    ".oxfmtrc.json",
+    "docs"
   ],
   "type": "module",
   "types": "./dist/fp/index.d.ts",
@@ -42,31 +47,48 @@
       "types": "./dist/fp/boundary.d.ts",
       "import": "./dist/fp/boundary.js"
     },
-    "./gates": {
-      "types": "./dist/gates/index.d.ts",
-      "import": "./dist/gates/index.js"
+    "./check": {
+      "types": "./dist/check/index.d.ts",
+      "import": "./dist/check/index.js"
+    },
+    "./oxlint": {
+      "types": "./dist/check/oxlint.b.d.ts",
+      "import": "./dist/check/oxlint.b.js"
+    },
+    "./oxfmt": {
+      "types": "./dist/check/oxfmt.b.d.ts",
+      "import": "./dist/check/oxfmt.b.js"
+    },
+    "./tsconfig.json": "./presets/tsconfig.strict.json",
+    "./tsconfig.node.json": "./presets/tsconfig.node.json",
+    "./node": {
+      "types": "./types/node.d.ts"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/build.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "gate": "node src/gates/cli.b.ts check",
-    "verify": "pnpm typecheck && pnpm format:check && pnpm test && pnpm build && pnpm gate",
+    "check": "node src/check/cli.b.ts check",
+    "verify": "pnpm check && pnpm test && pnpm build",
     "test:package": "node scripts/package-smoke.ts",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "lint": "node src/check/cli.b.ts lint",
+    "docs": "node scripts/docs.ts && oxfmt --write docs/rules.md"
   },
   "dependencies": {
+    "@types/node": "24.13.6",
     "oxc-parser": "0.150.0",
-    "oxc-resolver": "11.24.2"
+    "oxc-resolver": "11.24.2",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
+    "typescript": "7.0.2"
   },
   "devDependencies": {
-    "@types/node": "24.13.6",
     "fast-check": "4.10.1",
-    "oxfmt": "0.68.0",
-    "typescript": "7.0.2",
     "vitest": "5.0.1"
   },
   "engines": {

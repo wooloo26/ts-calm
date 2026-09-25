@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSources, runGates } from '../../src/gates/engine.ts';
-import { validateCommitMessage } from '../../src/gates/commit-message.ts';
-import { validateConfiguration } from '../../src/gates/config-reader.b.ts';
-import type { GateConfiguration } from '../../src/gates/types.ts';
+import { analyzeSources, runChecks } from '../../src/check/engine.ts';
+import { validateCommitMessage } from '../../src/check/commit-message.ts';
+import { validateConfiguration } from '../../src/check/config-reader.b.ts';
+import type { CheckConfig } from '../../src/check/types.ts';
 
-const lint = (content: string, path = 'src/value.ts', config: GateConfiguration = {}) => {
+const lint = (content: string, path = 'src/value.ts', config: CheckConfig = {}) => {
   const files = [{ path, content }];
   const imports = analyzeSources({ files }, config).flatMap((file) =>
     file.parsed.imports.map((imported) => ({
@@ -13,9 +13,9 @@ const lint = (content: string, path = 'src/value.ts', config: GateConfiguration 
       target: { kind: 'external' as const },
     })),
   );
-  return runGates({ files, imports }, config);
+  return runChecks({ files, imports }, config);
 };
-const rules = (content: string, path = 'src/value.ts', config: GateConfiguration = {}) =>
+const rules = (content: string, path = 'src/value.ts', config: CheckConfig = {}) =>
   lint(content, path, config).map((issue) => issue.rule);
 const boundary = (tags: string, code: string) =>
   `/**\n * @boundary Adapt external values and return an explicit result.\n${tags}\n */\n${code}`;
@@ -75,7 +75,7 @@ describe('boundary declarations', () => {
   });
   it('rejects incomplete caller-provided resolution graphs', () => {
     expect(
-      runGates({
+      runChecks({
         files: [{ path: 'src/a.ts', content: 'export * from "./b.ts"' }],
         imports: [],
       }).map((issue) => issue.rule),
@@ -207,17 +207,17 @@ describe('function length', () => {
   it('requires a valid attached reason and detects stale allowances', () => {
     expect(
       lint(
-        '// gate-allow-next-function function-length -- Single cohesive generated dispatch.\n' +
+        '// calm-allow-next-function function-length -- Single cohesive generated dispatch.\n' +
           long(151),
       ),
     ).toEqual([]);
-    expect(rules('// gate-allow-next-function function-length\n' + long(151))).toEqual(
+    expect(rules('// calm-allow-next-function function-length\n' + long(151))).toEqual(
       expect.arrayContaining(['function-length/allow-invalid', 'function-length']),
     );
-    expect(rules('// gate-allow-next-function function-length -- old\n' + long(1))).toContain(
+    expect(rules('// calm-allow-next-function function-length -- old\n' + long(1))).toContain(
       'function-length/allow-stale',
     );
-    expect(rules('// gate-allow-next-function function-length -- orphan')).toContain(
+    expect(rules('// calm-allow-next-function function-length -- orphan')).toContain(
       'function-length/allow-orphan',
     );
   });
@@ -235,11 +235,11 @@ describe('configuration and commits', () => {
     ).toContain('commit-message/ascii');
   });
   it('accepts explicit scopes without module metadata', () => {
-    expect(validateCommitMessage('feat(gates): explain boundaries')).toEqual([]);
-    expect(validateCommitMessage('feat(gates)!: change API\n\nBREAKING CHANGE: new API')).toEqual(
+    expect(validateCommitMessage('feat(check): explain boundaries')).toEqual([]);
+    expect(validateCommitMessage('feat(check)!: change API\n\nBREAKING CHANGE: new API')).toEqual(
       [],
     );
-    expect(validateCommitMessage('feat(gates): 中文')[0]?.rule).toBe('commit-message/ascii');
+    expect(validateCommitMessage('feat(check): 中文')[0]?.rule).toBe('commit-message/ascii');
     expect(validateCommitMessage('feat: no scope')[0]?.rule).toBe('commit-message/format');
     expect(
       validateCommitMessage('fix(nope): update', {

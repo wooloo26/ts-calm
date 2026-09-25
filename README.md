@@ -1,113 +1,83 @@
-# fp-gates
+# ts-calm
 
-Functional TypeScript primitives and five small architecture gates. MIT licensed.
+Calm defaults for TypeScript: functional values, explicit boundaries and one complete
+static check command. MIT licensed. Node 24+ for the CLI.
 
-[中文说明](README.zh-CN.md) · [Contributing](CONTRIBUTING.md)
+[中文说明](README.zh-CN.md) · [Rule guide](docs/rules.md) · [Contributing](CONTRIBUTING.md)
 
-## Install
-
-Requires Node 24+ for the CLI. The functional entry is platform independent ESM.
-Version 0.1.0 is prepared for publication; the npm install command becomes available
-after the maintainer publishes it. Until then, install the tarball from a CI artifact.
+## Start
 
 ```sh
-npm install fp-gates
+npm install ts-calm
+npx ts-calm init
+npx ts-calm fmt
+npx ts-calm check
 ```
 
-One package, three independent entry points:
+With pnpm, use `pnpm add ts-calm` and `pnpm exec ts-calm <command>`.
+Before the first npm publication, install the CI tarball instead of the package name.
 
-- `fp-gates`: Result, Option, combinators, collection helpers, branded types and codecs.
-- `fp-gates/boundary`: exception-to-Result adapters.
-- `fp-gates/gates`: checking API, configuration and diagnostics; imports Node and OXC.
+One installation includes pinned TypeScript, Oxfmt, Oxlint and oxlint-tsgolint.
+It works with npm's and pnpm's dependency layouts; no duplicate tool installation is
+required. The functional root entry does not load Node or any of these tools.
+The installation includes their files because this is deliberately one package.
 
-Importing the functional entry never loads the CLI, OXC, or Node-specific code. The
-package installation includes the gate dependencies because this is a single package.
+The project owns its package manager, workspace, build and tests. ts-calm does not
+install hooks, schedule tasks, build dependencies, or introduce module manifests.
 
-## Functional values
+| Entry                                                 | API                                                                          |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `ts-calm`                                             | Result, Option, combinators, collection helpers, type guards, codecs         |
+| `ts-calm/boundary`                                    | capture, captureAsync, captureResult, captureResultAsync                     |
+| `ts-calm/check`                                       | checkProject, checkStaged, checkLint, runChecks, CheckConfig and diagnostics |
+| `ts-calm/oxlint`, `ts-calm/oxfmt`                     | Native configuration presets                                                 |
+| `ts-calm/tsconfig.json`, `ts-calm/tsconfig.node.json` | Strict and Node ESM compiler presets                                         |
+
+## Commands
+
+| Command                        | Behavior                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| `check`                        | Format checking, type-aware lint, tsc and all custom rules; no source changes |
+| `check --staged`               | The complete check on one Git index snapshot                                  |
+| `fmt` / `fmt --check`          | Format with Oxfmt / inspect formatting without writing                        |
+| `lint`                         | Type-aware Oxlint and custom source rules                                     |
+| `typecheck`                    | tsc with the project's tsconfig and no emit                                   |
+| `init`                         | Create only missing configuration                                             |
+| `explain strict-fp/no-try`     | Offline explanation and a functional alternative                              |
+| `commit-message --file <path>` | Validate a message using the staged policy                                    |
+
+Commands accept `--cwd <directory>` and `--json`. Check commands emit diagnostic arrays
+with `rule`, `file`, `line`, `column`, `severity`, `message` and optional `help`/`docs`.
+Operational JSON failures use `{error:{kind:"operational",message}}`.
+Exit codes are 0 for success/warnings, 1 for code violations, 2 for invalid inputs or
+tool execution failures. Checking never silently skips a missing compiler configuration.
+`check` uses owned temporary compiler caches; it does not modify project build caches.
+
+## Small configuration
+
+`init` defaults to Node ESM. It creates a tsconfig extending the packaged Node preset,
+plus `oxlint.config.ts` and `oxfmt.config.ts` importing the native presets. Node ambient
+types are included through the type-only `ts-calm/node` bridge, even under pnpm.
+
+Existing JSON/JSONC/TS/MTS tool configs and tsconfig are preserved. Only a missing
+`package.json` `type` is set to `module`; an existing different value is kept with a
+warning. Dependency lists, scripts, workspace and package-manager fields are untouched.
+Running init again makes no changes. Frontend projects keep their own compiler settings
+and can extend just the strict preset.
+
+Tool commands prefer native project configs; otherwise they use the bundled defaults.
+The lint baseline retains correctness errors, TypeScript/Unicorn/import/promise plugins,
+and explicit floating-Promise, misused-Promise, any, non-null and exhaustiveness checks.
+
+Optional `ts-calm.config.ts` configures the source rules:
 
 ```ts
-import { ok, err, map, match, fromNullable } from 'fp-gates';
-
-const incremented = map(ok(3), (value) => value + 1);
-const message = match(incremented, {
-  ok: (value) => `value: ${value}`,
-  err: () => 'unreachable',
-});
-const name = fromNullable(process.env.NAME);
-const rejected = err({ code: 'missing-name' });
-```
-
-Containers are immutable and opaque. Use `isOk`, `isErr`, `isSome`, `isNone`, `get`
-and `getError`; don't inspect their internal representation. `get` only accepts an
-already-known successful/present variant. Constructors preserve literal inference.
-
-The API includes `flatMap`, `mapError`, `andThrough`, lazy `getOrElse`/`orElse`,
-`all`, `validateAll`, `traverse`, `filterMap`, `findMap`, `flatten`, `transpose`,
-`inspect`, `inspectError`, `at`, `lookup`, `nonEmpty`, `branded`, and `isUniqueBy`.
-`completeWithCleanup` preserves both operation and cleanup failures.
-Public declarations describe overloads and their synchronous/async behavior.
-
-```ts
-import { captureAsync } from 'fp-gates/boundary';
-
-const response = await captureAsync(() => fetch('https://example.com'), {
-  name: 'fetch-example',
-});
-```
-
-Unclassified failures become `Fault`; an optional classifier can distinguish expected
-failures. Callback bugs in ordinary combinators are not silently swallowed.
-`Decoder`/`Codec`, `decodeJson`/`encodeJson`, and explicit Option/Result DTO conversions
-remain available for real external data. There is no schema-registration framework.
-
-## Check a project
-
-```sh
-npx fp-gates check
-npx fp-gates check --json
-npx fp-gates check --staged
-npx fp-gates commit-message --file .git/COMMIT_EDITMSG
-```
-
-All commands accept `--cwd <directory>`. Exit codes: 0 = passed (possibly warnings),
-1 = rule errors, 2 = invalid configuration/arguments or operational failure.
-JSON check output is an array of `{rule,file,line,column,severity,message}`.
-
-All five rules are enabled by default:
-
-| Rule              | Default                                                                   |
-| ----------------- | ------------------------------------------------------------------------- |
-| `commit-message`  | `type(scope): description`, ASCII throughout, subject <= 100 characters   |
-| `function-length` | Warn above 80 effective lines; error above 150                            |
-| `boundary`        | Direct effects require a documented `.b.ts`; declarations must match code |
-| `no-file-cycles`  | Reject value, type-only, re-export and literal dynamic-import cycles      |
-| `strict-fp`       | Reject the explicitly listed syntax below; configurable per check         |
-
-Supported sources: TypeScript ESM (`.ts`, `.tsx`, `.mts`, `.cts` files using ESM syntax).
-Only `.b.ts` is a boundary suffix; JSX adapters should delegate effects to a `.b.ts`.
-Dependencies, `dist`, `build`, `coverage`, `.git`, `.local`, and declaration files are
-excluded. `test(s)`, `__tests__`, `fixture(s)`, `scripts` directories, `.test`/`.spec`
-files and `.config` files skip boundary/strict-fp by default, but still participate
-in length and cycle checks. Overrides can opt them in.
-
-The graph uses package exports/imports and tsconfig paths, including local workspace
-packages with exports. Install dependencies before checking. Unresolved imports,
-excluded internal targets, parse failures, computed imports and CommonJS `require`
-are reported rather than silently omitted. Dependency internals are not traversed.
-
-## Configuration
-
-Optional `gate.config.ts` exports a synchronous configuration object. It is trusted
-project code executed by Node; top-level await is unsupported. No module manifests
-or per-file JSON registries are needed.
-
-```ts
-import { defineConfig } from 'fp-gates/gates';
+import { defineConfig } from 'ts-calm/check';
 
 export default defineConfig({
   effectImports: ['better-sqlite3', 'some-network-sdk'],
   rules: {
-    'commit-message': { scopes: ['root', 'app'], maxLength: 100, ascii: true },
+    'commit-message': { scopes: ['root', 'app'] },
     'function-length': { warning: 80, maximum: 150 },
     'strict-fp': { 'no-null': false },
   },
@@ -115,104 +85,131 @@ export default defineConfig({
 });
 ```
 
-Set a rule to `false` to disable it, including `strict-fp` as a whole. `files` and
-`ignores` accept forward-slash `*`, `**`, `?` globs. `files` replaces the default
-source patterns. `effectImports` lists exact import specifiers, not glob patterns.
-Cycle configuration is project-wide; it cannot be disabled per file.
+It is synchronous trusted project code; top-level await is unsupported. `files` and
+`ignores` accept `/` paths and `*`, `**`, `?` globs. `effectImports` contains exact import
+specifiers. Rules can be disabled with `false`; cycle rules and commit policy are
+project-wide. Native tool configuration remains in each tool's own format.
 
-Strict checks: `no-throw`, `no-try`, `no-assertion`, `no-any`, `no-non-null`,
-`no-null`, `no-undefined`, `no-class`, `no-this`, `no-with`, `no-var`, `no-delete`,
-`no-module-state`. `as const`, local `let`, bounded loops, native JSON and pure
-third-party imports are allowed. This is an explicit syntax policy, not a proof
-of referential transparency or deep immutability.
+## Six source rules
 
-## Boundaries that explain themselves
+| Rule               | Default                                                                         |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `commit-message`   | `type(scope): description`, ASCII throughout, subject <= 100 characters         |
+| `function-length`  | Warn above 80 effective lines; error above 150                                  |
+| `boundary`         | Direct effects require a documented `.b.ts`; annotations must match actual code |
+| `no-file-cycles`   | Reject value, type-only, re-export and literal dynamic-import cycles            |
+| `no-module-cycles` | Each source directory is a module; reject cycles between directories            |
+| `strict-fp`        | Reject the explicit syntax restrictions listed in the rule guide                |
+
+A module cycle can exist without a file cycle: `orders/read.ts -> stock/types.ts`
+and `stock/write.ts -> orders/types.ts` already make the two directories depend on each
+other. Reports show the directory loop and actual import locations. Nested and test
+directories are modules too; same-directory edges only affect the file-cycle rule.
+
+Supported source is TypeScript using ESM syntax (`.ts`, `.tsx`, `.mts`, `.cts`). Only
+`.b.ts` has boundary meaning. Installed dependencies, build output, declarations,
+`.git` and `.local` are excluded. Test/fixture/scripts directories and test/config
+files skip boundary/strict-fp by default, but remain in both cycle and length checks.
+
+The graph resolves standard package exports/imports, tsconfig paths and workspace
+packages with exports. Unresolved imports, excluded project targets, computed imports,
+CommonJS require and syntax failures are reported. Install dependencies first; any
+required generated declarations remain the project's responsibility.
+
+Local `let`, loops, `as const`, native JSON and pure third-party imports are allowed.
+These are explicit conventions, not a proof of purity or deep immutability.
+In ts-calm commands, any/non-null diagnostics are owned by strict-fp, including disabled
+checks and valid boundary exceptions, so they are not duplicated by Oxlint. Promise and
+exhaustiveness lint stay independent. Direct Oxlint/editor invocation follows its native
+config and does not interpret ts-calm boundary annotations.
+
+## Prefer functional helpers
+
+Containers are immutable and opaque. Use `ok`, `err`, `some`, `none`, predicates,
+`get` and `getError`. `get` requires a known successful/present variant.
+
+```ts
+import { ok, map, fromNullable, getOrElse } from 'ts-calm';
+
+const incremented = map(ok(3), (value) => value + 1);
+const name = getOrElse(fromNullable(externalName), () => 'anonymous');
+```
+
+`fromNullable` preserves 0, false and the empty string. A real protocol null is not
+necessarily absence. `no-try` diagnostics recommend the capture family, including
+captureResult variants for operations already returning Result. Ordinary combinators
+do not swallow callback defects. [The canonical rule guide](docs/rules.md) and `explain`
+share the same explanations; no automatic try/finally rewrite is attempted.
 
 ```ts
 /**
- * @boundary Read external configuration and represent read failures as Result.
+ * @boundary Read external configuration and represent filesystem failure as Result.
  * @effects node:fs/promises
- * @allow strict-fp/no-try -- Catch native filesystem exceptions at this adapter.
  */
 import { readFile } from 'node:fs/promises';
-import { ok, err } from 'fp-gates';
+import { captureAsync } from 'ts-calm/boundary';
 
-export const readConfiguration = async (path: string) => {
-  try {
-    return ok(await readFile(path, 'utf8'));
-  } catch (cause) {
-    return err(cause);
-  }
-};
+export const readConfiguration = (path: string) =>
+  captureAsync(() => readFile(path, 'utf8'), { name: 'read-config' });
 ```
 
-Place one nonempty `@boundary` in leading comments before code (license comments and
-shebangs are allowed). Describe why adaptation is necessary and what callers can rely on.
-Repeat `@effects <exact module or API>` for observed direct effects. Builtins normalize
-`fs` to `node:fs`; globals use names such as `fetch`, `process`, `console`, `Date.now`,
-`Date` (current-time construction), `Math.random`, or `crypto.randomUUID`.
+Using capture avoids a raw try exception, but the filesystem operation is still a
+boundary. `@boundary` states its reason and guarantee; `@effects` lists exact observed
+modules/APIs. Only when needed, add `@allow strict-fp/<check> -- reason` or `strict-fp/*`.
+Neither bypasses boundary validation, length, cycle or commit checks. Unknown, duplicate,
+unused and malformed declarations fail. Types, schemas, forwarding and ordinary
+composition alone do not justify `.b.ts`.
 
-`@allow strict-fp/<check> -- reason` exempts that check throughout this file.
-`@allow strict-fp/* -- reason` exempts all strict-fp checks. Neither exempts boundary
-validation, length, cycles or commit messages. There are no effect wildcards.
+The checker observes known platform effects and simple aliases. It cannot infer every
+third-party implementation, reflection or callback effect, or prove a written reason
+truthful. Configure effectful SDKs and review the guarantee.
 
-Unused, duplicated, unknown or malformed declarations fail. Turning strict-fp off
-does not make a still-used annotation stale. An adapter needs an implementation and
-actual direct effects or syntax adaptation. Types, schema declarations, mere imports,
-pure forwarding, or ordinary composition calling another boundary do not justify `.b.ts`.
+### Additional helpers
 
-```ts
-// Wrong as pure.b.ts: adding a reason does not establish a real boundary.
-/** @boundary A helper. */
-export const double = (value: number) => value * 2;
-```
+| API             | Guarantee                                                                               |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `isArray`       | readonly unknown array; does not validate elements                                      |
+| `isObject`      | Non-null object, including arrays/Date/Map, excluding functions; not a dictionary claim |
+| `isPlainObject` | Current-realm ordinary or null-prototype dictionary; values remain unknown              |
+| `hasOwn`        | The checked own property exists; does not read getters or validate the payload          |
+| `traverseAsync` | Sequential traversal, preserves order, stops invoking callbacks after the first Err     |
 
-The checker observes known platform APIs, imported bindings and simple aliases.
-It cannot infer arbitrary third-party effects, indirect callbacks, reflection, or
-whether a natural-language justification is truthful. Configure effectful SDKs and
-review the reason. Ordinary orchestration may call adapters without becoming `.b.ts`.
+Guards return false for revoked/uninspectable proxies. A union key passed to hasOwn
+does not prove that every union member exists. traverseAsync accepts synchronous and
+async Results; thrown or rejected callback defects reject its Promise.
+
+Existing map/flatMap/mapError, lazy recovery, collection helpers, branded types,
+cleanup composition and real Decoder/Codec/JSON adapters remain available. There are
+no new nullable aliases, throwing unwrap helpers or concurrency framework.
 
 Function length ignores blank/comment-only lines and nested function bodies; braces
-count as code. A cohesive long function can have one immediately preceding comment:
+count. A justified exception immediately precedes its function:
 
 ```ts
-// gate-allow-next-function function-length -- This dispatch follows one external format.
+// calm-allow-next-function function-length -- This dispatch mirrors one external format.
 ```
 
-It must name the rule, include a reason, and still exceed the warning threshold.
+## Staging, development and publication
 
-## Hooks and staged checks
+Use `check --staged` in your existing pre-commit hook and `commit-message --file "$1"`
+in commit-msg. The full index, including config, is materialized in an owned temporary
+directory. No stash, checkout, staging or working-tree writes occur. Partial staging,
+rename/deletion and concurrent index changes are checked. Conflicted entries, tracked
+symlinks and submodules are rejected explicitly. Installed dependencies are reused;
+project source and configuration always come from the snapshot.
 
-Use the CLI with your existing hook runner; the package installs no hooks automatically.
-Pre-commit runs `fp-gates check --staged`; commit-msg runs
-`fp-gates commit-message --file "$1"`.
-
-Staged checking reads the entire index, including its config, into an owned temporary
-directory. It never stashes, stages, rewrites, or checks out your files. It checks the
-full graph, supports partial staging and rejects an index that changes mid-check.
-Installed dependencies are reused; workspace sources and package metadata come from
-the snapshot. Conflicted entries, tracked symlinks and submodules are rejected explicitly.
-
-## API and development
-
-`checkProject(root, config?)` and `checkStaged(root)` read projects and return diagnostics;
-operational errors throw. `runGates({files, imports}, config?)` runs checks on source text.
-For sources with imports, provide one `ResolvedImport` per import; the resolver edge
-can be `project`, `external`, or `error`. `analyzeSources` exposes import offsets for
-adapters. `validateCommitMessage(message, config?)` works without a repository.
+`checkProject` and `checkStaged` perform the complete static check. `checkSourceProject`
+performs only custom source rules. `runChecks({files,imports}, config?)` is the pure
+source-analysis API; provide a complete resolved edge list for files with imports.
+Operational failures throw; code problems return diagnostics.
 
 ```sh
 pnpm verify
 pnpm test:package
+# The maintainer performs only this final upload manually:
+npm publish .local/release/ts-calm-0.1.0.tgz --access public
 ```
 
-Windows and Linux CI validates source, types, gates, build and a separately installed
-tarball consumer. Release artifacts live in `.local/release`; npm publishing is manual:
-
-```sh
-npm publish .local/release/fp-gates-0.1.0.tgz --access public
-```
-
-The tarball includes compiled JavaScript, declarations, READMEs, license and package
-metadata. The functional library was extracted from the author's local-tx-one-piece
-project; game/client materials and the original repository history are not included.
+Windows/Linux CI tests source, compiler types, complete staged checking, and separate
+npm/pnpm tarball consumers. Runtime imports never depend on the original game project.
+Publication is manual; CI uploads verified tarballs without publishing to npm.

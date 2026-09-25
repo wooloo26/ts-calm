@@ -2,7 +2,6 @@
  * @boundary Load and validate the project's synchronous configuration; reject invalid options explicitly.
  * @effects node:fs
  * @effects node:module
- * @allow strict-fp/no-null -- Reject null in externally supplied configuration objects.
  * @allow strict-fp/no-assertion -- Cast only after validating every supported configuration field.
  * @allow strict-fp/no-throw -- Invalid configuration is an operational failure handled by the CLI.
  * @allow strict-fp/no-delete -- Reload the selected config instead of retaining a stale require cache entry.
@@ -11,26 +10,34 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { strictChecks } from './types.ts';
-import type { GateConfiguration } from './types.ts';
+import type { CheckConfig } from './types.ts';
+import { isArray, isPlainObject } from '../fp/guards.ts';
 
 const object = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
+  if (!isPlainObject(value))
     throw new Error('Configuration must contain objects, not null or arrays.');
-  return value as Record<string, unknown>;
+  return value;
 };
 const keys = (value: Record<string, unknown>, allowed: readonly string[]): void => {
   for (const key of Object.keys(value))
     if (!allowed.includes(key)) throw new Error(`Unknown configuration option: ${key}`);
 };
 const strings = (value: unknown, key: string): void => {
-  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && item.length > 0))
+  if (!isArray(value) || !value.every((item) => typeof item === 'string' && item.length > 0))
     throw new Error(`${key} must be an array of nonempty strings.`);
 };
-const ruleNames = ['commit-message', 'function-length', 'boundary', 'no-file-cycles', 'strict-fp'];
+const ruleNames = [
+  'commit-message',
+  'function-length',
+  'boundary',
+  'no-file-cycles',
+  'no-module-cycles',
+  'strict-fp',
+];
 
 const validateRuleOptions = (name: string, value: unknown): void => {
   if (typeof value === 'boolean') return;
-  if (name === 'boundary' || name === 'no-file-cycles')
+  if (name === 'boundary' || name === 'no-file-cycles' || name === 'no-module-cycles')
     throw new Error(`${name} must be a boolean.`);
   const options = object(value);
   const allowed =
@@ -54,7 +61,7 @@ const validateRuleOptions = (name: string, value: unknown): void => {
     throw new Error('function-length warning must not exceed maximum.');
 };
 
-export const validateConfiguration = (value: unknown): GateConfiguration => {
+export const validateConfiguration = (value: unknown): CheckConfig => {
   const config = object(value);
   keys(config, ['files', 'ignores', 'effectImports', 'rules', 'overrides']);
   for (const key of ['files', 'ignores', 'effectImports'])
@@ -73,17 +80,17 @@ export const validateConfiguration = (value: unknown): GateConfiguration => {
       const rules = object(override['rules']);
       keys(rules, ruleNames);
       for (const [name, enabled] of Object.entries(rules)) {
-        if (name === 'no-file-cycles' || name === 'commit-message')
+        if (name === 'no-file-cycles' || name === 'no-module-cycles' || name === 'commit-message')
           throw new Error(`${name} is project-wide; configure it at rules, not overrides.`);
         if (typeof enabled !== 'boolean') throw new Error('Override rules must be booleans.');
       }
     }
   }
-  return config as GateConfiguration;
+  return config as CheckConfig;
 };
 
-export const loadConfiguration = (root: string): GateConfiguration => {
-  const path = join(root, 'gate.config.ts');
+export const loadConfiguration = (root: string): CheckConfig => {
+  const path = join(root, 'ts-calm.config.ts');
   if (!existsSync(path)) return {};
   const load = createRequire(import.meta.url);
   delete load.cache[path];

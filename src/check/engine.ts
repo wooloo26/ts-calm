@@ -2,13 +2,15 @@ import { parseSource } from './parser.b.ts';
 import { analyzeBoundary } from './boundary.ts';
 import { checkFunctionLength } from './function-length.ts';
 import { checkCycles } from './cycles.ts';
+import { checkModuleCycles } from './module-cycles.ts';
+import { helpForRule, documentationFor } from './rule-help.ts';
 import { enabled, selected } from './configuration.ts';
 import { diagnostic } from './diagnostics.ts';
-import type { AnalyzedFile, Diagnostic, GateConfiguration, GateInput } from './types.ts';
+import type { AnalyzedFile, Diagnostic, CheckConfig, CheckInput } from './types.ts';
 
 export const analyzeSources = (
-  input: GateInput,
-  config: GateConfiguration = {},
+  input: CheckInput,
+  config: CheckConfig = {},
 ): readonly AnalyzedFile[] =>
   input.files
     .filter((file) => selected(file.path, config))
@@ -17,7 +19,7 @@ export const analyzeSources = (
       parsed: parseSource(source, config.effectImports),
     }));
 
-const checkFile = (file: AnalyzedFile, config: GateConfiguration): readonly Diagnostic[] => {
+const checkFile = (file: AnalyzedFile, config: CheckConfig): readonly Diagnostic[] => {
   const diagnostics: Diagnostic[] = [];
   for (const issue of file.parsed.issues)
     diagnostics.push(diagnostic(file.source, 'source/parse', issue.name, issue.offset));
@@ -33,23 +35,18 @@ const checkFile = (file: AnalyzedFile, config: GateConfiguration): readonly Diag
         ([name, active]) => name === fact.name && active === false,
       );
       if (disabled || boundary.allowances.has('*') || boundary.allowances.has(fact.name)) continue;
-      diagnostics.push(
-        diagnostic(
-          file.source,
-          `strict-fp/${fact.name}`,
-          `Forbidden ${fact.name}; isolate necessary adaptation in a documented .b.ts file.`,
-          fact.offset,
-        ),
-      );
+      const rule = `strict-fp/${fact.name}`;
+      const help = helpForRule(rule);
+      diagnostics.push({
+        ...diagnostic(file.source, rule, `Forbidden ${fact.name}.`, fact.offset),
+        ...(help ? { help: help.summary, docs: documentationFor(rule) } : {}),
+      });
     }
   }
   return diagnostics;
 };
 
-export const runGates = (
-  input: GateInput,
-  config: GateConfiguration = {},
-): readonly Diagnostic[] => {
+export const runChecks = (input: CheckInput, config: CheckConfig = {}): readonly Diagnostic[] => {
   const analyzed = analyzeSources(input, config);
   const diagnostics = analyzed.flatMap((file) => checkFile(file, config));
   const checked = new Set(analyzed.map((file) => file.source.path));
@@ -101,6 +98,13 @@ export const runGates = (
       ),
     );
   }
+  if (config.rules?.['no-module-cycles'] !== false)
+    diagnostics.push(
+      ...checkModuleCycles(
+        analyzed.map((file) => file.source),
+        input.imports ?? [],
+      ),
+    );
   return diagnostics.toSorted(
     (left, right) =>
       left.file.localeCompare(right.file) ||

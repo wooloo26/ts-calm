@@ -4,8 +4,11 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { git, initializeGit, withProject, write } from '../../fixtures/project.ts';
-import { checkStaged, checkStagedMessage, withStagedProject } from '../../src/gates/staged.b.ts';
-import { checkProject } from '../../src/gates/project.b.ts';
+import { checkStagedMessage, withStagedProject } from '../../src/check/staged.b.ts';
+import { checkSourceProject as checkProject } from '../../src/check/sources.b.ts';
+import { formatProject } from '../../src/check/tools.b.ts';
+
+const checkStaged = (root: string) => withStagedProject(root, checkProject);
 
 describe('staged snapshots', () => {
   it('checks staged bytes and preserves partially staged worktree/index content', () => {
@@ -23,15 +26,15 @@ describe('staged snapshots', () => {
   it('uses the staged configuration in both check directions', () => {
     withProject(
       {
-        'gate.config.ts': 'export default {rules:{"strict-fp":false}}',
+        'ts-calm.config.ts': 'export default {rules:{"strict-fp":false}}',
         'src/a.ts': 'export const value=null;',
       },
       (root) => {
         initializeGit(root);
-        write(root, 'gate.config.ts', 'export default {rules:{"strict-fp":true}}');
+        write(root, 'ts-calm.config.ts', 'export default {rules:{"strict-fp":true}}');
         expect(checkStaged(root)).toEqual([]);
-        git(root, 'add', 'gate.config.ts');
-        write(root, 'gate.config.ts', 'export default {rules:{"strict-fp":false}}');
+        git(root, 'add', 'ts-calm.config.ts');
+        write(root, 'ts-calm.config.ts', 'export default {rules:{"strict-fp":false}}');
         expect(checkStaged(root).map((issue) => issue.rule)).toContain('strict-fp/no-null');
       },
     );
@@ -67,11 +70,11 @@ describe('staged snapshots', () => {
   });
   it('uses staged commit policy and does not need module manifests', () => {
     withProject(
-      { 'gate.config.ts': 'export default {rules:{"commit-message":{scopes:["fp"]}}}' },
+      { 'ts-calm.config.ts': 'export default {rules:{"commit-message":{scopes:["fp"]}}}' },
       (root) => {
         initializeGit(root);
         expect(checkStagedMessage(root, 'fix(fp): update')).toEqual([]);
-        expect(checkStagedMessage(root, 'fix(gates): update').map((issue) => issue.rule)).toContain(
+        expect(checkStagedMessage(root, 'fix(check): update').map((issue) => issue.rule)).toContain(
           'commit-message/scope',
         );
       },
@@ -80,7 +83,7 @@ describe('staged snapshots', () => {
 });
 
 describe('CLI exit codes', () => {
-  const cli = fileURLToPath(new URL('../../src/gates/cli.b.ts', import.meta.url));
+  const cli = fileURLToPath(new URL('../../src/check/cli.b.ts', import.meta.url));
   const invoke = (root: string, ...args: string[]) =>
     spawnSync(process.execPath, [cli, ...args, '--cwd', root], {
       encoding: 'utf8',
@@ -88,6 +91,12 @@ describe('CLI exit codes', () => {
     });
   it('distinguishes successful checks, rule failures and operational errors', () => {
     withProject({ 'src/a.ts': 'export const a=1;' }, (root) => {
+      write(
+        root,
+        'tsconfig.json',
+        '{"compilerOptions":{"strict":true,"module":"NodeNext","target":"ES2024","types":[]},"include":["src/**/*.ts"]}',
+      );
+      formatProject(root, false);
       expect(invoke(root, 'check').status).toBe(0);
       write(root, 'src/a.ts', 'export const a=null;');
       const failed = invoke(root, 'check', '--json');

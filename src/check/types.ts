@@ -3,6 +3,7 @@ export type RuleName =
   | 'function-length'
   | 'boundary'
   | 'no-file-cycles'
+  | 'no-module-cycles'
   | 'strict-fp';
 
 export const strictChecks = [
@@ -28,9 +29,11 @@ export type Diagnostic = Readonly<{
   column: number;
   severity: 'error' | 'warning';
   message: string;
+  help?: string;
+  docs?: string;
 }>;
 export type SourceFile = Readonly<{ path: string; content: string }>;
-export type GateConfiguration = Readonly<{
+export type CheckConfig = Readonly<{
   files?: readonly string[];
   ignores?: readonly string[];
   effectImports?: readonly string[];
@@ -41,12 +44,15 @@ export type GateConfiguration = Readonly<{
     'function-length'?: boolean | Readonly<{ warning?: number; maximum?: number }>;
     boundary?: boolean;
     'no-file-cycles'?: boolean;
+    'no-module-cycles'?: boolean;
     'strict-fp'?: boolean | Readonly<Partial<Record<StrictCheck, boolean>>>;
   }>;
   overrides?: readonly Readonly<{
     files: readonly string[];
     rules: Readonly<
-      Partial<Record<Exclude<RuleName, 'commit-message' | 'no-file-cycles'>, boolean>>
+      Partial<
+        Record<Exclude<RuleName, 'commit-message' | 'no-file-cycles' | 'no-module-cycles'>, boolean>
+      >
     >;
   }>[];
 }>;
@@ -77,7 +83,7 @@ export type ResolvedImport = Readonly<{
   imported: ImportFact;
   target: ImportResolution;
 }>;
-export type GateInput = Readonly<{
+export type CheckInput = Readonly<{
   files: readonly SourceFile[];
   imports?: readonly ResolvedImport[];
 }>;

@@ -22,6 +22,6 @@ export const formatDiagnostics = (diagnostics: readonly Diagnostic[]): string =>
   diagnostics
     .map(
       (item) =>
-        `${item.file}:${item.line}:${item.column} ${item.severity} ${item.rule}: ${item.message}`,
+        `${item.file}:${item.line}:${item.column} ${item.severity} ${item.rule}: ${item.message}${item.help ? `\n  ${item.help.replaceAll('\n', '\n  ')}` : ''}${item.docs ? `\n  ${item.docs}` : ''}`,
     )
     .join('\n');

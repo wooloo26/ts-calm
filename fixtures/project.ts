@@ -12,7 +12,7 @@ export const withProject = <Value>(
   files: Readonly<Record<string, string>>,
   inspect: (root: string) => Value,
 ): Value => {
-  const root = mkdtempSync(join(tmpdir(), 'fp-gates-test-'));
+  const root = mkdtempSync(join(tmpdir(), 'ts-calm-test-'));
   try {
     write(root, 'package.json', '{"type":"module"}');
     for (const [path, content] of Object.entries(files)) write(root, path, content);

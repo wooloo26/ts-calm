@@ -43,6 +43,10 @@ const classifyFailure = <Problem>(
   }
 };
 
+/**
+ * Replace a try/catch at an external operation with Result. Does not remove the operation's I/O boundary.
+ * @see https://github.com/wooloo26/ts-calm/blob/main/docs/rules.md#strict-fp-no-try
+ */
 export const capture = <Value = never, Problem = never>(
   operation: () => Synchronous<Value>,
   options: CaptureOptions<Problem>,
@@ -54,6 +58,7 @@ export const capture = <Value = never, Problem = never>(
   }
 };
 
+/** Capture both a synchronous invocation throw and an awaited rejection; preserve explicit failure classification. */
 export const captureAsync = async <Value = never, Problem = never>(
   operation: () => PromiseLike<Value>,
   options: CaptureOptions<Problem>,

@@ -3,7 +3,7 @@ import type { FunctionFact, SourceComment } from './types.ts';
 export const functionWarningLines = 80;
 export const functionMaximumLines = 150;
 export const functionLengthRule = 'function-length';
-const allowanceMarker = 'gate-allow-next-function';
+const allowanceMarker = 'calm-allow-next-function';
 
 export type FunctionAllowance = Readonly<{
   target: string;

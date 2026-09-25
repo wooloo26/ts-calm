@@ -229,6 +229,23 @@ export type CompletionIssue<Problem, CleanupProblem> = Readonly<{
   cleanupErrors: readonly CleanupProblem[];
 }>;
 
+/** Visit in order, stop at the first Err, and leave thrown/rejected callback defects uncaught. */
+export const traverseAsync = async <Input, Output, Problem = never>(
+  values: readonly Input[],
+  operation: (
+    value: Input,
+    index: number,
+  ) => Result<Output, Problem> | PromiseLike<Result<Output, Problem>>,
+): Promise<Result<readonly Output[], Problem>> => {
+  const collected: Output[] = [];
+  for (const [index, value] of values.entries()) {
+    const result = await operation(value, index);
+    if (isErr(result)) return result;
+    collected.push(get(result));
+  }
+  return ok(collected);
+};
+
 export function completeWithCleanup<Value = never, Problem = never, CleanupProblem = never>(
   primary: Result<Value, Problem>,
   cleanupResults: readonly Result<unknown, CleanupProblem>[],

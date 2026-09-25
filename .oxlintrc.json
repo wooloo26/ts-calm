@@ -1,0 +1,14 @@
+{
+  "plugins": ["typescript", "unicorn", "import", "promise"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/switch-exhaustiveness-check": "error"
+  },
+  "ignorePatterns": [".local/**", "node_modules/**", "coverage/**", "dist/**", "build/**"]
+}
