@@ -1,0 +1,76 @@
+{
+  "name": "fp-gates",
+  "version": "0.1.0",
+  "description": "Functional TypeScript primitives and small, explicit architecture gates.",
+  "keywords": [
+    "architecture",
+    "boundary",
+    "functional",
+    "option",
+    "result",
+    "typescript"
+  ],
+  "homepage": "https://github.com/wooloo26/fp-gates#readme",
+  "bugs": "https://github.com/wooloo26/fp-gates/issues",
+  "license": "MIT",
+  "author": "wooloo26",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wooloo26/fp-gates.git"
+  },
+  "bin": {
+    "fp-gates": "./dist/gates/cli.b.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "types": "./dist/fp/index.d.ts",
+  "imports": {
+    "#src/*": "./src/fp/*",
+    "#fixtures/*": "./fixtures/fp/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/fp/index.d.ts",
+      "import": "./dist/fp/index.js"
+    },
+    "./boundary": {
+      "types": "./dist/fp/boundary.d.ts",
+      "import": "./dist/fp/boundary.js"
+    },
+    "./gates": {
+      "types": "./dist/gates/index.d.ts",
+      "import": "./dist/gates/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "gate": "node src/gates/cli.b.ts check",
+    "verify": "pnpm typecheck && pnpm format:check && pnpm test && pnpm build && pnpm gate",
+    "test:package": "node scripts/package-smoke.ts",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "oxc-parser": "0.150.0",
+    "oxc-resolver": "11.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "fast-check": "4.10.1",
+    "oxfmt": "0.68.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.22.0"
+}
