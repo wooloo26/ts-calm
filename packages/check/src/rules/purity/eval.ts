@@ -1,9 +1,9 @@
-import { record, text, offset, children, functionNode, effectName } from '#src/parser.b';
-import { property, unique, unknown, fnForExport } from '#src/purity-values';
-import type { Node } from '#src/parser.b';
-import type { FunctionModel, PurityModel, Binding } from '#src/purity-model';
-import { typeKind } from '#src/purity-model';
-import type { Value, Frame, Evaluation, Project } from '#src/purity-values';
+import { record, text, offset, children, functionNode, effectName } from '#src/core/parser.b';
+import { property, unique, unknown, fnForExport } from '#src/rules/purity/values';
+import type { Node } from '#src/core/parser.b';
+import type { FunctionModel, PurityModel, Binding } from '#src/rules/purity/model';
+import { typeKind } from '#src/rules/purity/model';
+import type { Value, Frame, Evaluation, Project } from '#src/rules/purity/values';
 
 type Context = Readonly<{
   project: Project;

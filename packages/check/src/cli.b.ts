@@ -10,10 +10,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { checkProject } from '#src/project';
-import { explainRule, helpForRule } from '#src/rule-help';
+import { explainRule, helpForRule } from '#src/rules/help';
 import { checkStaged, checkStagedMessage } from '#src/staged.b';
-import { formatDiagnostics } from '#src/diagnostics';
-import type { Diagnostic } from '#src/types';
+import { formatDiagnostics } from '#src/core/diagnostics';
+import type { Diagnostic } from '#src/core/types';
 
 const usage =
   'ts-calm check [--staged] [--json] [--cwd <directory>]\nts-calm typecheck [--json] [--cwd <directory>]\nts-calm init [--json] [--cwd <directory>]\nts-calm explain <rule> [--json]\nts-calm commit-message --file <path> [--json] [--cwd <directory>]';

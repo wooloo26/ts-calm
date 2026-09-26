@@ -1,5 +1,5 @@
 import { checkSourceProject } from '#src/sources.b';
-import type { CheckConfig, Diagnostic } from '#src/types';
+import type { CheckConfig, Diagnostic } from '#src/core/types';
 
 /**
  * Apply the source rules to one project.

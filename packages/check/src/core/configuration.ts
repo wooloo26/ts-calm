@@ -1,4 +1,4 @@
-import type { CheckConfig, RuleName } from '#src/types';
+import type { CheckConfig, RuleName } from '#src/core/types';
 
 export const defineConfig = (config: CheckConfig): CheckConfig => config;
 

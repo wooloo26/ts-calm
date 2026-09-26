@@ -13,7 +13,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import type { Diagnostic } from '#src/types';
+import type { Diagnostic } from '#src/core/types';
 
 const load = createRequire(import.meta.url);
 /** @impure Resolve the pinned compiler in the installed dependency graph. */

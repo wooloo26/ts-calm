@@ -5,9 +5,9 @@ import {
   maskedSource,
   mentionsAllowance,
   parseAllowance,
-} from '#src/function-lines';
-import { diagnostic } from '#src/diagnostics';
-import type { AnalyzedFile, Diagnostic, CheckConfig } from '#src/types';
+} from '#src/rules/function-length/lines';
+import { diagnostic } from '#src/core/diagnostics';
+import type { AnalyzedFile, Diagnostic, CheckConfig } from '#src/core/types';
 
 export const checkFunctionLength = (
   { source, parsed }: AnalyzedFile,

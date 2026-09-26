@@ -10,8 +10,8 @@
 import { existsSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { strictChecks } from '#src/types';
-import type { CheckConfig } from '#src/types';
+import { strictChecks } from '#src/core/types';
+import type { CheckConfig } from '#src/core/types';
 import { isArray, isPlainObject } from '@ts-calm/fp';
 import { compilerConditions } from '#src/compiler-options.b';
 

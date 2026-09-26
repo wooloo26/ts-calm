@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { ResolverFactory } from 'oxc-resolver';
 import { classifyTarget } from '#src/resolution';
 import { compilerConditions } from '#src/compiler-options.b';
-import type { AnalyzedFile, ResolvedImport } from '#src/types';
+import type { AnalyzedFile, ResolvedImport } from '#src/core/types';
 
 /** @impure Read package metadata from disk. */
 const packageName = (path: string): string => {

@@ -1,6 +1,6 @@
-import { record, text, offset, children, functionNode } from '#src/parser.b';
-import type { Node } from '#src/parser.b';
-import type { AnalyzedFile } from '#src/types';
+import { record, text, offset, children, functionNode } from '#src/core/parser.b';
+import type { Node } from '#src/core/parser.b';
+import type { AnalyzedFile } from '#src/core/types';
 
 export type Binding = {
   id: string;

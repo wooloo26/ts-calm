@@ -1,7 +1,7 @@
-import { record, text, children } from '#src/parser.b';
-import { typeKind } from '#src/purity-model';
-import type { Node } from '#src/parser.b';
-import type { PurityModel, FunctionModel, Binding } from '#src/purity-model';
+import { record, text, children } from '#src/core/parser.b';
+import { typeKind } from '#src/rules/purity/model';
+import type { Node } from '#src/core/parser.b';
+import type { PurityModel, FunctionModel, Binding } from '#src/rules/purity/model';
 
 export type Value =
   | Readonly<{ kind: 'unknown'; shape?: string }>

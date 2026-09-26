@@ -1,6 +1,6 @@
-import { diagnostic } from '#src/diagnostics';
-import { strictChecks } from '#src/types';
-import type { AnalyzedFile, Diagnostic } from '#src/types';
+import { diagnostic } from '#src/core/diagnostics';
+import { strictChecks } from '#src/core/types';
+import type { AnalyzedFile, Diagnostic } from '#src/core/types';
 
 type Declaration = Readonly<{ tag: string; value: string; offset: number }>;
 export type BoundaryAnalysis = Readonly<{

@@ -21,8 +21,8 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { loadConfiguration } from '#src/config-reader.b';
 import { checkProject } from '#src/project';
-import { validateCommitMessage } from '#src/commit-message';
-import type { Diagnostic } from '#src/types';
+import { validateCommitMessage } from '#src/rules/commit-message';
+import type { Diagnostic } from '#src/core/types';
 
 /** @impure Execute Git and collect its output. */
 const git = (root: string, args: readonly string[], input?: string): Buffer => {

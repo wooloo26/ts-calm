@@ -1,7 +1,7 @@
-import { diagnostic } from '#src/diagnostics';
-import type { Diagnostic, ResolvedImport, SourceFile } from '#src/types';
+import { diagnostic } from '#src/core/diagnostics';
+import type { Diagnostic, ResolvedImport, SourceFile } from '#src/core/types';
 
-export const checkCycles = (
+export const checkNoFileCycles = (
   files: readonly SourceFile[],
   imports: readonly ResolvedImport[],
 ): readonly Diagnostic[] => {

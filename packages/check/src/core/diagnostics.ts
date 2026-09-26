@@ -1,4 +1,4 @@
-import type { Diagnostic, SourceFile } from '#src/types';
+import type { Diagnostic, SourceFile } from '#src/core/types';
 
 export const diagnostic = (
   source: SourceFile,

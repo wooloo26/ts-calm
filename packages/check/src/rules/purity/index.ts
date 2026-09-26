@@ -1,10 +1,10 @@
-import { buildPurityModel } from '#src/purity-model';
-import { evaluatePurity } from '#src/purity-eval';
-import { diagnostic } from '#src/diagnostics';
-import { enabled } from '#src/configuration';
-import type { AnalyzedFile, CheckConfig, Diagnostic, ResolvedImport } from '#src/types';
-import type { Project, Evaluation } from '#src/purity-values';
-import type { FunctionModel, PurityModel } from '#src/purity-model';
+import { buildPurityModel } from '#src/rules/purity/model';
+import { evaluatePurity } from '#src/rules/purity/eval';
+import { diagnostic } from '#src/core/diagnostics';
+import { enabled } from '#src/core/configuration';
+import type { AnalyzedFile, CheckConfig, Diagnostic, ResolvedImport } from '#src/core/types';
+import type { Project, Evaluation } from '#src/rules/purity/values';
+import type { FunctionModel, PurityModel } from '#src/rules/purity/model';
 
 const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonly Diagnostic[] =>
   models.flatMap((model) => {

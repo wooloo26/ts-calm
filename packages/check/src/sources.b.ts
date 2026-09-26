@@ -5,10 +5,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzeSources, runAnalyzedChecks } from '#src/engine';
-import { excluded, selected } from '#src/configuration';
+import { excluded, selected } from '#src/core/configuration';
 import { loadConfiguration } from '#src/config-reader.b';
 import { resolveImports } from '#src/resolver.b';
-import type { Diagnostic, CheckConfig, SourceFile } from '#src/types';
+import type { Diagnostic, CheckConfig, SourceFile } from '#src/core/types';
 
 /** @impure Enumerate project files on disk. */
 export const projectPaths = (root: string, config: CheckConfig = {}): readonly string[] => {

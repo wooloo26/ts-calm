@@ -30,5 +30,3 @@ or browser reads the sources as they are.
   replacement for `fromNullable`.
 - Serialization is explicit: `toResultData`, `toOptionData` and `encodeJson` publish only the
   documented DTO shapes.
-
-Every exported symbol is documented and that coverage is enforced by a test in the workspace.

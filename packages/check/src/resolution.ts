@@ -1,5 +1,5 @@
 import { isAbsolute, relative } from 'node:path';
-import type { ImportResolution } from '#src/types';
+import type { ImportResolution } from '#src/core/types';
 
 const normal = (path: string): string => path.replaceAll('\\', '/');
 

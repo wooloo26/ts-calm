@@ -5,7 +5,7 @@
  * @allow strict-fp/no-try -- Native parser failures must become visible diagnostics.
  */
 import { parseSync } from 'oxc-parser';
-import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from '#src/types';
+import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from '#src/core/types';
 
 export type Node = Readonly<Record<string, unknown>>;
 export type Child = Readonly<{ key: string; node: Node }>;

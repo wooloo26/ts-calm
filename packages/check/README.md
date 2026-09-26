@@ -26,4 +26,4 @@ Exports `defineConfig`, `runChecks`, `analyzeSources`, `checkProject`, `checkSou
 plus the `CheckConfig`, `Diagnostic`, `RuleName`, `InitResult`, `CheckInput`, `SourceFile`,
 `StrictCheck`, `ResolvedImport`, `ImportResolution` and `ImportFact` types. `checkProject`,
 `checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject` and `initializeProject`
-are asynchronous. Every exported symbol is documented, enforced by a test in this package.
+are asynchronous.

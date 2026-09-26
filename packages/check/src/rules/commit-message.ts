@@ -1,5 +1,5 @@
-import { diagnostic } from '#src/diagnostics';
-import type { Diagnostic, CheckConfig } from '#src/types';
+import { diagnostic } from '#src/core/diagnostics';
+import type { Diagnostic, CheckConfig } from '#src/core/types';
 
 export const validateCommitMessage = (
   message: string,

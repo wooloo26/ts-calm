@@ -1,4 +1,4 @@
-import type { FunctionFact, SourceComment } from '#src/types';
+import type { FunctionFact, SourceComment } from '#src/core/types';
 
 export const functionWarningLines = 80;
 export const functionMaximumLines = 150;

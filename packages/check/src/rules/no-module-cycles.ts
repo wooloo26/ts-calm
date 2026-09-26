@@ -1,11 +1,11 @@
-import { diagnostic } from '#src/diagnostics';
-import type { Diagnostic, ResolvedImport, SourceFile } from '#src/types';
+import { diagnostic } from '#src/core/diagnostics';
+import type { Diagnostic, ResolvedImport, SourceFile } from '#src/core/types';
 
 type Edge = Readonly<{ from: string; to: string; target: string; offset: number }>;
 const directory = (path: string): string =>
   path.replaceAll('\\', '/').split('/').slice(0, -1).join('/') || '.';
 
-export const checkModuleCycles = (
+export const checkNoModuleCycles = (
   files: readonly SourceFile[],
   imports: readonly ResolvedImport[],
 ): readonly Diagnostic[] => {
