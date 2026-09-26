@@ -1,16 +1,16 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  resolve: { conditions: ['ts-calm-source'] },
-  ssr: { resolve: { conditions: ['ts-calm-source'] } },
+  resolve: { conditions: ['source'] },
+  ssr: { resolve: { conditions: ['source'] } },
   test: {
-    include: ['tests/**/*.ts'],
+    include: ['packages/*/tests/**/*.ts', '!packages/*/tests/fixtures/**'],
     maxWorkers: 2,
     restoreMocks: true,
     testTimeout: 30000,
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      include: ['packages/*/src/**/*.ts'],
       reportsDirectory: '.local/reports/coverage',
       reporter: ['text-summary', 'json-summary', 'html'],
     },

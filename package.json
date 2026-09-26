@@ -1,15 +1,8 @@
 {
-  "name": "ts-calm",
-  "version": "0.1.0",
-  "description": "Calm defaults, functional values and a complete TypeScript check command.",
-  "keywords": [
-    "architecture",
-    "boundary",
-    "functional",
-    "option",
-    "result",
-    "typescript"
-  ],
+  "name": "@ts-calm/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Development workspace for the @ts-calm packages: functional runtime, check tool and workspace template.",
   "homepage": "https://github.com/wooloo26/ts-calm#readme",
   "bugs": "https://github.com/wooloo26/ts-calm/issues",
   "license": "MIT",
@@ -18,93 +11,34 @@
     "type": "git",
     "url": "git+https://github.com/wooloo26/ts-calm.git"
   },
-  "bin": {
-    "ts-calm": "./dist/check/cli.b.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "README.zh-CN.md",
-    "LICENSE",
-    "presets",
-    "types",
-    ".oxlintrc.json",
-    ".oxfmtrc.json",
-    "docs"
-  ],
   "type": "module",
-  "types": "./dist/fp/index.d.ts",
-  "imports": {
-    "#fp/*": {
-      "ts-calm-source": "./src/fp/*.ts",
-      "default": "./dist/fp/*.js"
-    },
-    "#check/*": {
-      "ts-calm-source": "./src/check/*.ts",
-      "default": "./dist/check/*.js"
-    },
-    "#tests/*": "./tests/*.ts",
-    "#fixtures/*": "./fixtures/*.ts",
-    "#scripts/*": "./scripts/*.ts"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/fp/index.d.ts",
-      "import": "./dist/fp/index.js"
-    },
-    "./boundary": {
-      "types": "./dist/fp/boundary.d.ts",
-      "import": "./dist/fp/boundary.js"
-    },
-    "./check": {
-      "types": "./dist/check/index.d.ts",
-      "import": "./dist/check/index.js"
-    },
-    "./oxlint": {
-      "types": "./dist/check/oxlint.b.d.ts",
-      "import": "./dist/check/oxlint.b.js"
-    },
-    "./oxfmt": {
-      "types": "./dist/check/oxfmt.b.d.ts",
-      "import": "./dist/check/oxfmt.b.js"
-    },
-    "./tsconfig.json": "./presets/tsconfig.strict.json",
-    "./tsconfig.node.json": "./presets/tsconfig.node.json",
-    "./node": {
-      "types": "./types/node.d.ts"
-    }
-  },
   "scripts": {
-    "build": "node --conditions=ts-calm-source scripts/build.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "node --conditions=ts-calm-source node_modules/vitest/vitest.mjs run",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "check": "node --conditions=ts-calm-source src/check/cli.b.ts check",
-    "verify": "pnpm check && pnpm test && pnpm build",
-    "test:package": "node --conditions=ts-calm-source scripts/package-smoke.ts",
-    "prepack": "pnpm build",
-    "lint": "node --conditions=ts-calm-source src/check/cli.b.ts lint",
-    "docs": "node --conditions=ts-calm-source scripts/docs.ts && oxfmt --write docs/rules.md",
-    "test:template": "node --conditions=ts-calm-source scripts/workspace-smoke.ts",
-    "test:coverage": "node --conditions=ts-calm-source node_modules/vitest/vitest.mjs run --coverage",
-    "test:mutation": "node --conditions=ts-calm-source scripts/mutation.ts",
-    "bench": "node --conditions=ts-calm-source node_modules/vitest/vitest.mjs bench --run --config vitest.bench.config.ts"
-  },
-  "dependencies": {
-    "@types/node": "24.13.6",
-    "oxc-parser": "0.150.0",
-    "oxc-resolver": "11.24.2",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
-    "oxlint-tsgolint": "7.0.2002",
-    "typescript": "7.0.2"
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:mutation": "node --conditions=source scripts/mutation.b.ts",
+    "bench": "vitest bench --run --config vitest.bench.config.ts",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware .",
+    "check": "node --conditions=source packages/check/src/cli.b.ts check",
+    "docs": "node --conditions=source packages/check/scripts/docs.ts && oxfmt --write docs/rules.md",
+    "test:package": "node --conditions=source packages/check/scripts/package-test.ts",
+    "test:template": "node --conditions=source packages/create-template/scripts/workspace-smoke.ts",
+    "verify": "pnpm build && pnpm typecheck && pnpm check && pnpm lint && pnpm fmt:check && pnpm test"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/vitest-runner": "10.0.0",
+    "@ts-calm/check": "workspace:*",
+    "@types/node": "24.13.6",
     "@vitest/coverage-v8": "5.0.1",
-    "fast-check": "4.10.1",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
+    "turbo": "2.11.4",
+    "typescript": "7.0.2",
     "vitest": "5.0.1"
   },
   "engines": {

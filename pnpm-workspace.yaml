@@ -1,7 +1,16 @@
+packages:
+  - packages/*
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
   - '@types/node@24.13.6'
+  - '@turbo/darwin-64@2.11.4'
+  - '@turbo/darwin-arm64@2.11.4'
+  - '@turbo/linux-64@2.11.4'
+  - '@turbo/linux-arm64@2.11.4'
+  - '@turbo/windows-64@2.11.4'
+  - '@turbo/windows-arm64@2.11.4'
+  - turbo@2.11.4
 packageExtensions:
   # Only Stryker's dev-only config preprocessor needs the pre-7 compiler API.
   '@stryker-mutator/core@10.0.0':

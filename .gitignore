@@ -1,5 +1,8 @@
 node_modules/
 dist/
 .local/
+.turbo/
 *.tgz
 coverage/
+packages/check/types/node/
+packages/check/types/undici-types/

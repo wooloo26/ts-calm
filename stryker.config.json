@@ -3,7 +3,7 @@
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "vitest": { "configFile": "vitest.mutation.config.ts" },
-  "mutate": ["src/fp/nullable.b.ts", "src/check/commit-message.ts"],
+  "mutate": ["packages/fp/src/nullable.b.ts", "packages/check/src/commit-message.ts"],
   "reporters": ["clear-text", "json", "html"],
   "jsonReporter": { "fileName": ".local/reports/mutation/report.json" },
   "htmlReporter": { "fileName": ".local/reports/mutation/index.html" },

@@ -1,0 +1,86 @@
+{
+  "name": "@ts-calm/check",
+  "version": "0.1.0",
+  "description": "The complete TypeScript check command: pinned format, type-aware lint, compiler and source-rule checks with reusable APIs and build presets.",
+  "keywords": [
+    "architecture",
+    "boundary",
+    "check",
+    "lint",
+    "oxlint",
+    "typescript"
+  ],
+  "homepage": "https://github.com/wooloo26/ts-calm#readme",
+  "bugs": "https://github.com/wooloo26/ts-calm/issues",
+  "license": "MIT",
+  "author": "wooloo26",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wooloo26/ts-calm.git",
+    "directory": "packages/check"
+  },
+  "bin": {
+    "ts-calm": "./dist/cli.b.js"
+  },
+  "files": [
+    "dist",
+    "presets",
+    "types",
+    "README.md"
+  ],
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "imports": {
+    "#src/*": {
+      "source": "./src/*.ts",
+      "default": "./dist/*.js"
+    },
+    "#tests/*": "./tests/*.ts"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./oxlint": {
+      "source": "./src/oxlint.b.ts",
+      "types": "./dist/oxlint.b.d.ts",
+      "import": "./dist/oxlint.b.js"
+    },
+    "./oxfmt": {
+      "source": "./src/oxfmt.b.ts",
+      "types": "./dist/oxfmt.b.d.ts",
+      "import": "./dist/oxfmt.b.js"
+    },
+    "./tsconfig.json": "./presets/tsconfig.strict.json",
+    "./tsconfig.node.json": "./presets/tsconfig.node.json",
+    "./node": {
+      "types": "./types/node.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node --experimental-strip-types scripts/build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ts-calm/create-template": "workspace:*",
+    "@ts-calm/fp": "workspace:*",
+    "oxc-parser": "0.150.0",
+    "oxc-resolver": "11.24.2",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
+    "typescript": "7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "undici-types": "7.18.2",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

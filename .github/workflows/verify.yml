@@ -26,23 +26,25 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm fmt:check
+      - run: pnpm build
+      - run: pnpm typecheck
       - run: pnpm check
       - if: runner.os == 'Linux'
         run: pnpm test:coverage
       - if: runner.os != 'Linux'
         run: pnpm test
-      - run: pnpm build
       - run: pnpm test:package
       - run: pnpm test:template
-      - name: Check committed sources through the index
-        run: node dist/check/cli.b.js check --staged
+      - name: Check committed sources through the built CLI
+        run: node packages/check/dist/cli.b.js check --staged
       - name: Check the commit message
         shell: bash
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           git log -1 --format=%B "$COMMIT_SHA" > .local/commit-message
-          node dist/check/cli.b.js commit-message --file .local/commit-message
+          node packages/check/dist/cli.b.js commit-message --file .local/commit-message
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: package-${{ matrix.os }}

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.strict.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true
+  }
+}

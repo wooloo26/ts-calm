@@ -1,0 +1,59 @@
+{
+  "name": "@ts-calm/fp",
+  "version": "0.1.0",
+  "description": "Calm defaults for functional TypeScript: Option and Result containers, combinators, safe external-value guards and explicit serialization.",
+  "keywords": [
+    "functional",
+    "guards",
+    "option",
+    "result",
+    "runtime",
+    "typescript"
+  ],
+  "homepage": "https://github.com/wooloo26/ts-calm#readme",
+  "bugs": "https://github.com/wooloo26/ts-calm/issues",
+  "license": "MIT",
+  "author": "wooloo26",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wooloo26/ts-calm.git",
+    "directory": "packages/fp"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "imports": {
+    "#tests/*": "./tests/*.ts"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./boundary": {
+      "source": "./src/boundary.ts",
+      "types": "./dist/boundary.d.ts",
+      "import": "./dist/boundary.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "fast-check": "4.10.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

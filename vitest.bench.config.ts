@@ -1,11 +1,11 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  resolve: { conditions: ['ts-calm-source'] },
-  ssr: { resolve: { conditions: ['ts-calm-source'] } },
+  resolve: { conditions: ['source'] },
+  ssr: { resolve: { conditions: ['source'] } },
   test: {
     benchmark: {
-      include: ['benchmarks/**/*.bench.ts'],
+      include: ['packages/*/benchmarks/**/*.bench.ts'],
     },
   },
 });

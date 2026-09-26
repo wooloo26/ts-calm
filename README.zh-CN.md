@@ -1,38 +1,49 @@
 # ts-calm
 
-给自己的 TypeScript 项目准备的一组省心约定。Node 24+、ESM、MIT。
+给自己的 TypeScript 项目准备的一组省心约定，按职责拆成三个包。Node 24+、ESM、MIT。
 [English](README.md) · [详细规则指南](docs/rules.md)
+
+| 包                                                               | 职责                         |
+| ---------------------------------------------------------------- | ---------------------------- |
+| [`@ts-calm/fp`](packages/fp/README.md)                           | 运行时：Option、Result、守卫 |
+| [`@ts-calm/check`](packages/check/README.md)                     | 工具：`ts-calm` 检查命令     |
+| [`@ts-calm/create-template`](packages/create-template/README.md) | workspace 生成器             |
 
 ## 开始
 
 ```sh
-pnpm add ts-calm
+pnpm add -D @ts-calm/check
+pnpm add @ts-calm/fp
 pnpm exec ts-calm init
-pnpm exec ts-calm fmt
+pnpm exec ts-calm typecheck
 pnpm exec ts-calm check
 ```
 
-首次 npm 发布前安装已验收的 tarball。一个包带齐固定版本的格式、lint、TypeScript 工具；
-函数库根入口不会加载这些工具。包管理、构建、workspace 和测试仍由项目决定。
+运行时与工具是两个包。`@ts-calm/check` 带齐固定版本的编译器、lint、格式工具及其预设；
+导入 `@ts-calm/fp` 不会加载它们。包管理、构建和测试仍由项目决定。
 
 ## 命令与功能
 
 | 命令                           | 用途                                                         |
 | ------------------------------ | ------------------------------------------------------------ |
-| `check` / `check --staged`     | 完整静态检查 / 检查同一份暂存源码和配置，不修改源码          |
-| `fmt` / `fmt --check`          | 格式化 / 只检查格式                                          |
-| `lint` / `typecheck`           | 单独运行相应检查                                             |
+| `check` / `check --staged`     | 源码规则：检查工作区 / 检查冻结的 Git 暂存内容               |
+| `typecheck`                    | 用固定版本编译器检查项目自己的 `tsconfig.json`               |
 | `init`                         | 补齐缺失的 Node ESM 配置，不覆盖已有选择                     |
+| `init --template pnpm-turbo`   | 调用 `@ts-calm/create-template` 生成 workspace               |
 | `explain <规则>`               | 查看原因及函数式替代写法                                     |
 | `commit-message --file <路径>` | 检查 `scope - verb description`，例如 `fp - add safe guards` |
 
 支持 `--cwd`、`--json`。退出码：0 通过，1 代码问题，2 配置或执行失败。
+格式（`oxfmt --write .`、`oxfmt --check .`）和 lint（`oxlint --type-aware .`）保留为项目脚本，
+因为 workspace 每个包各跑一次。
 
-- `ts-calm`：Result、Option、组合函数、类型守卫、集合工具和 Codec。
-- `ts-calm/boundary`：capture/captureAsync 及其 Result 版本。
-- `ts-calm/check`：检查 API 与 CheckConfig。
+- `@ts-calm/fp`：Result、Option、组合函数、类型守卫、集合工具和 Codec。
+- `@ts-calm/fp/boundary`：capture/captureAsync 及其 Result 版本。
+- `@ts-calm/check`：检查 API 与 CheckConfig。
+- `@ts-calm/check/tsconfig.node.json`、`/oxlint`、`/oxfmt`、`/node`：内置预设。
 - 七条源码规则：提交消息、函数长度、边界、文件循环、目录循环、strict-fp、purity。
-- 包内使用 Node 原生 `#` 路径；开发测试选源码，安装包默认选 `dist`。
+- 包内使用相对路径并保留 `.ts` 后缀，Node、打包器和浏览器都能解析；只属于 Node 的 `#`
+  映射浏览器读不到，所以面向 web 的运行时包不使用它。
 
 默认遵循纯函数约定，已知副作用用 `/** @impure 原因 */` 标明。
 允许普通循环和局部数据构造；这是有限检查，不是任意 JavaScript 的纯度证明。
@@ -41,21 +52,45 @@ pnpm exec ts-calm check
 ## Workspace 模板
 
 ```sh
-pnpm exec ts-calm init --template pnpm-turbo --cwd ./my-project
+pnpm dlx @ts-calm/create-template my-project
 cd my-project
 pnpm install
-pnpm build && pnpm check && pnpm test && pnpm start
+pnpm fmt && pnpm lint && pnpm typecheck && pnpm build && pnpm check && pnpm test
 ```
 
-生成私有 app/shared workspace、原生 `#src/*`、Turbo 和可运行示例。
-目标必须不存在或为空，不自动安装依赖或启动进程。本仓库仍保持单包。
+生成私有 `packages/a` + `packages/b` workspace，带 Turbo、project references、每包测试和可运行示例。
+目标必须不存在或为空，不自动安装依赖或启动进程。
+
+## 发布
+
+三个包按依赖顺序手动发布：
+
+```sh
+pnpm build
+pnpm test:package
+npm publish packages/fp --access public
+npm publish packages/create-template --access public
+npm publish packages/check --access public
+```
+
+`pnpm test:package` 把三个包打成 `.local/release` 下的 tarball，把内部 `workspace:*`
+替换成 tarball 路径，然后用真实 npm 与 pnpm 安装验收：`init` 幂等、CLI、类型声明，
+以及 `@ts-calm/fp` 在没有检查工具的情况下可以独立加载。
 
 ## 本项目开发
 
-行为改动按 TDD：先失败测试，再实现，再重构。文档修改不硬凑测试。
-日常跑 `pnpm verify`，相关测试用 `pnpm test -- <路径>`。
-`test:coverage` 看漏测，`test:mutation` 定点检查两个目标，`bench` 测热点；不追求统一满分，也不用耗时波动阻断提交。
-报告在 `.local/reports`。`test:package`、`test:template` 验收真实安装和生成项目。
-修改规则说明后用 `pnpm run docs` 更新指南。
+本仓库是 pnpm workspace，包含三个包和这个私有根包。
 
-最后手动上传：`npm publish .local/release/ts-calm-0.1.0.tgz --access public`。
+```sh
+pnpm install
+pnpm build       # turbo：fp -> check -> create-template
+pnpm typecheck   # 每个包
+pnpm check       # 整个 workspace 的格式、lint 与源码规则
+pnpm test        # vitest 跑 packages/*/tests
+pnpm verify      # build、typecheck、check、lint、fmt:check、test
+```
+
+其他门禁：`pnpm test:coverage`、`pnpm test:mutation`（带 runner canary）、`pnpm bench`、
+`pnpm test:package`、`pnpm test:template`。报告在 `.local/reports`。
+行为改动按 TDD：先失败测试，再实现，再重构。文档修改不硬凑测试。
+修改规则说明后用 `pnpm docs` 更新指南。
