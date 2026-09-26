@@ -2,7 +2,7 @@ export type RuleHelp = Readonly<{ summary: string; example: string }>;
 export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
   purity: {
     summary:
-      'Production functions follow a pure-by-default convention. Declare known I/O, time, randomness or external state effects with a leading @impure reason. Local construction and loops are allowed; project calls propagate known effects, while private temporary mutations stay local. Higher-order helpers depend on their callbacks. This bounded analysis does not prove unknown third-party calls, getters, proxies or dynamic dispatch pure. The annotation never bypasses boundary or other checks.',
+      'Production functions follow a pure-by-default convention. Declare known I/O, time, randomness or external state effects with a leading @impure reason. Local construction and loops are allowed; project calls propagate known effects, while private temporary mutations stay local. Higher-order helpers depend on their callbacks. This bounded analysis does not prove unknown third-party calls, getters, proxies, dynamic dispatch or recursive allocation factories pure. Each root function has a budget of 512 context expansions; purity/incomplete warns when calls remain unvisited. The annotation never bypasses boundary or other checks.',
     example:
       '/** @impure Read the system clock. */\nexport const now = () => Date.now();\n// Direct host operations also require a documented .b.ts boundary.',
   },

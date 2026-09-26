@@ -7,22 +7,14 @@
  * @allow strict-fp/no-try -- Always remove only the temporary directory owned by this invocation.
  */
 import { spawnSync } from 'node:child_process';
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { loadConfiguration } from '#src/config-reader.b';
 import { checkProject } from '#src/project';
 import { validateCommitMessage } from '#src/rules/commit-message';
 import type { Diagnostic } from '#src/core/types';
+import { linkSnapshotDependencies } from '#src/dependency-snapshot.b';
 
 /** @impure Execute Git and collect its output. */
 const git = (root: string, args: readonly string[], input?: string): Buffer => {
@@ -112,29 +104,6 @@ const materialize = (root: string, temporary: string, index: string): readonly I
 };
 
 /**
- * Link the installed dependencies of every staged package into the snapshot.
- *
- * A workspace package keeps its own dependencies, so linking only the repository root would report
- * every package-private import as unresolved.
- *
- * @impure Creates the snapshot's dependency links.
- */
-const linkDependencies = (
-  repository: string,
-  temporary: string,
-  entries: readonly IndexEntry[],
-): void => {
-  for (const entry of entries) {
-    if (!/(?:^|\/)package\.json$/.test(entry.path)) continue;
-    const directory = dirname(entry.path);
-    const installed = join(repository, directory, 'node_modules');
-    const destination = join(temporary, directory, 'node_modules');
-    if (existsSync(installed) && !existsSync(destination))
-      symlinkSync(realpathSync(installed), destination, 'junction');
-  }
-};
-
-/**
  * Create a temporary index snapshot, invoke the inspection, and remove the snapshot again.
  *
  * @impure Reads Git objects and writes this invocation's snapshot.
@@ -153,7 +122,11 @@ export const withStagedProject = async <Value>(
   const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-staged-'));
   try {
     const entries = materialize(repository, temporary, before);
-    linkDependencies(repository, temporary, entries);
+    linkSnapshotDependencies(
+      repository,
+      temporary,
+      entries.map((entry) => entry.path).filter((path) => /(?:^|\/)package\.json$/.test(path)),
+    );
     const result = await inspect(temporary);
     const after = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
     if (before !== after) throw new Error('Git index changed while checking; retry.');

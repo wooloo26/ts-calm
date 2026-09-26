@@ -16,6 +16,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "test:dist": "node packages/check/scripts/smoke.ts",
     "test:coverage": "vitest run --coverage",
     "bench": "vitest bench --run --config vitest.bench.config.ts",
     "fmt": "oxfmt --write .",
@@ -24,7 +25,7 @@
     "check": "node --conditions=source packages/check/src/cli.b.ts check",
     "commit-message": "node --conditions=source packages/check/src/cli.b.ts commit-message",
     "docs": "node --conditions=source packages/check/scripts/docs.ts",
-    "verify": "pnpm build && pnpm typecheck && pnpm check && pnpm lint && pnpm fmt:check && pnpm test"
+    "verify": "pnpm build && pnpm typecheck && pnpm check && pnpm lint && pnpm fmt:check && pnpm test && pnpm test:dist"
   },
   "devDependencies": {
     "@ts-calm/check": "workspace:*",

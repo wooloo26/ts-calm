@@ -135,7 +135,7 @@ describe('staged snapshots', () => {
 describe('CLI exit codes', () => {
   const cli = fileURLToPath(new URL('../src/cli.b.ts', import.meta.url));
   const invoke = (root: string, ...args: string[]) =>
-    spawnSync(process.execPath, ['--conditions=ts-calm-source', cli, ...args, '--cwd', root], {
+    spawnSync(process.execPath, ['--conditions=source', cli, ...args, '--cwd', root], {
       encoding: 'utf8',
       windowsHide: true,
     });

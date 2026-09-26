@@ -1,6 +1,8 @@
 const variant = Symbol('functional.variant');
 const content = Symbol('functional.content');
 const problem = Symbol('functional.problem');
+// Identity, not observable properties, authenticates a container. Weak keys do not retain payloads.
+const identities = new WeakMap<object, string>();
 
 /** A successful result carrying one value. Created by {@link ok}; the payload is private. */
 export interface Ok<Value> {
@@ -53,6 +55,7 @@ export function ok<Value>(...values: [] | [Value]): Ok<Value | Unit> {
     [variant]: 'ok',
     [content]: values.length === 0 ? empty : values[0],
   };
+  identities.set(container, 'ok');
   return Object.freeze(container);
 }
 
@@ -64,6 +67,7 @@ export function ok<Value>(...values: [] | [Value]): Ok<Value | Unit> {
  */
 export const err = <const Problem>(error: Problem): Err<Problem> => {
   const container: Err<Problem> = { [variant]: 'err', [problem]: error };
+  identities.set(container, 'err');
   return Object.freeze(container);
 };
 
@@ -75,6 +79,7 @@ export const err = <const Problem>(error: Problem): Err<Problem> => {
  */
 export const some = <const Value>(value: Value): Some<Value> => {
   const container: Some<Value> = { [variant]: 'some', [content]: value };
+  identities.set(container, 'some');
   return Object.freeze(container);
 };
 
@@ -92,15 +97,12 @@ export const none = (): None => absent;
 export const unit = (): Unit => empty;
 
 const hasVariant = (value: unknown, expected: string): boolean =>
-  typeof value === 'object' &&
-  value instanceof Object &&
-  variant in value &&
-  value[variant] === expected;
+  typeof value === 'object' && !!value && identities.get(value) === expected;
 
 /**
  * Test whether a value is an `Ok` produced by this library.
  *
- * @param value - Any value; structural lookalikes are rejected because the variant is a private symbol.
+ * @param value - Any value; only identities registered by this module are accepted.
  * @returns `true` only for a genuine `Ok`.
  */
 export const isOk = <Container>(value: Container): value is Container & Ok<unknown> =>
@@ -109,7 +111,7 @@ export const isOk = <Container>(value: Container): value is Container & Ok<unkno
 /**
  * Test whether a value is an `Err` produced by this library.
  *
- * @param value - Any value; structural lookalikes are rejected because the variant is a private symbol.
+ * @param value - Any value; only identities registered by this module are accepted.
  * @returns `true` only for a genuine `Err`.
  */
 export const isErr = <Container>(value: Container): value is Container & Err<unknown> =>
@@ -118,7 +120,7 @@ export const isErr = <Container>(value: Container): value is Container & Err<unk
 /**
  * Test whether a value is a `Some` produced by this library.
  *
- * @param value - Any value; structural lookalikes are rejected because the variant is a private symbol.
+ * @param value - Any value; only identities registered by this module are accepted.
  * @returns `true` only for a genuine `Some`.
  */
 export const isSome = <Container>(value: Container): value is Container & Some<unknown> =>
@@ -127,11 +129,10 @@ export const isSome = <Container>(value: Container): value is Container & Some<u
 /**
  * Test whether a value is the `None` singleton.
  *
- * @param value - Any value; structural lookalikes are rejected because the variant is a private symbol.
+ * @param value - Any value; only this module's shared singleton is accepted.
  * @returns `true` only for a genuine `None`.
  */
-export const isNone = <Container>(value: Container): value is Container & None =>
-  hasVariant(value, 'none');
+export const isNone = <Container>(value: Container): value is Container & None => value === absent;
 
 /**
  * Test whether a value is a `Result` produced by this library.

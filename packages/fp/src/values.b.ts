@@ -1,6 +1,7 @@
 /**
  * @boundary Adapt collection membership and validated decoder output into precise nominal types.
  * @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
+ * @allow strict-fp/no-try -- A native Map brand probe rejects dictionaries without invoking their properties.
  */
 import { get, isErr, none, ok, some } from './containers.ts';
 import type { Option, Result } from './containers.ts';
@@ -62,7 +63,7 @@ export const at = <Value>(values: readonly Value[], index: number): Option<Value
 /**
  * Read one map entry without confusing a stored value with absence.
  *
- * @param values - A `ReadonlyMap` or a dictionary.
+ * @param values - A native `Map` (also through a `ReadonlyMap` view) or a dictionary. Convert custom map implementations to a native Map first.
  * @param key - The key or property to look up.
  * @returns `Some` with the stored value, or `None` when the key is absent.
  */
@@ -103,11 +104,16 @@ export function lookup<Key, Value>(
 
 const isReadonlyMap = <Key, Value>(
   values: ReadonlyMap<Key, Value> | Readonly<Record<PropertyKey, Value>>,
-): values is ReadonlyMap<Key, Value> =>
-  typeof values['size'] === 'number' &&
-  typeof values['get'] === 'function' &&
-  typeof values['has'] === 'function' &&
-  Symbol.iterator in values;
+): values is ReadonlyMap<Key, Value> => nativeMap(values);
+
+const nativeMap = (value: object): boolean => {
+  try {
+    Map.prototype.has.call(value, value);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const ownEntries = <Value>(
   values: Readonly<Record<PropertyKey, Value>>,

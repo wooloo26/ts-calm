@@ -30,6 +30,7 @@ export type FunctionModel = {
   annotated: boolean;
   reason: string;
   annotationOffsets: number[];
+  captures: string[];
 };
 export type ExportTarget = Readonly<{ binding?: string; specifier?: string; name?: string }>;
 export type PurityModel = {
@@ -37,6 +38,7 @@ export type PurityModel = {
   module: string;
   bindings: Map<string, Binding>;
   refs: Map<number, string>;
+  nodeOwners: Map<number, string>;
   functions: Map<string, FunctionModel>;
   functionNodes: Map<number, string>;
   exports: Map<string, ExportTarget>;
@@ -51,6 +53,7 @@ const typeKind = (node: Node): string => {
   if (annotation['type'] === 'TSTypeAnnotation' || annotation['type'] === 'TSTypeOperator')
     return typeKind(record(annotation['typeAnnotation']));
   if (['TSArrayType', 'TSTupleType'].includes(text(annotation, 'type'))) return 'array';
+  if (['TSTypeLiteral', 'TSInterfaceBody'].includes(text(annotation, 'type'))) return 'object';
   const name = text(record(annotation['typeName']), 'name');
   if (['Array', 'ReadonlyArray', 'NonEmptyReadonlyArray'].includes(name)) return 'array';
   if (['Map', 'ReadonlyMap'].includes(name)) return 'map';
@@ -182,6 +185,35 @@ const annotation = (file: AnalyzedFile, anchor: number) => {
   };
 };
 
+/** @impure Bind loop elements to their iterable's abstract element origin. */
+const declareIteration = (model: PurityModel, node: Node, scope: Scope): void => {
+  const left = record(node['left']);
+  if (left['type'] !== 'VariableDeclaration') return;
+  for (const entry of members(left['declarations']))
+    declare(
+      model,
+      scope,
+      record(entry['id']),
+      {
+        type: 'MemberExpression',
+        object: node['right'],
+        computed: true,
+        property: { type: 'Literal', value: '*' },
+        start: offset(node),
+        end: offset(node, 'end'),
+      },
+      false,
+    );
+};
+
+/** @impure Register type definitions for later collection and property shape resolution. */
+const registerType = (model: PurityModel, node: Node): void => {
+  if (node['type'] === 'TSTypeAliasDeclaration')
+    model.typeDefs.set(text(record(node['id']), 'name'), record(node['typeAnnotation']));
+  if (node['type'] === 'TSInterfaceDeclaration')
+    model.typeDefs.set(text(record(node['id']), 'name'), record(node['body']));
+};
+
 /** @impure Populate this invocation's lexical model maps and builder records. */
 const walkModel = (
   model: PurityModel,
@@ -191,10 +223,8 @@ const walkModel = (
   anchor: number,
 ): void => {
   const kind = text(node, 'type');
-  if (kind === 'TSTypeAliasDeclaration')
-    model.typeDefs.set(text(record(node['id']), 'name'), record(node['typeAnnotation']));
-  if (kind === 'TSInterfaceDeclaration')
-    model.typeDefs.set(text(record(node['id']), 'name'), record(node['body']));
+  model.nodeOwners.set(offset(node), scope.owner);
+  registerType(model, node);
   if (functionNode(node) && Object.keys(record(node['body'])).length) {
     const id = `${model.file.source.path}:${offset(node)}`;
     const name =
@@ -216,6 +246,7 @@ const walkModel = (
         parent['type'] === 'CallExpression' ||
         parent['type'] === 'NewExpression' ||
         parent['type'] === 'AssignmentPattern',
+      captures: [],
       ...annotation(model.file, anchor),
     };
     model.functions.set(id, fn);
@@ -232,6 +263,8 @@ const walkModel = (
     return;
   }
   let current = scope;
+  if (['ForOfStatement', 'ForInStatement', 'ForStatement'].includes(kind))
+    current = { owner: scope.owner, parent: scope, names: new Map() };
   if (kind === 'Program' || kind === 'BlockStatement') {
     current = kind === 'Program' ? scope : { owner: scope.owner, parent: scope, names: new Map() };
     predeclare(model, current, members(node['body']));
@@ -246,6 +279,7 @@ const walkModel = (
           record(entry['init']),
           node['kind'] !== 'const',
         );
+  if (kind === 'ForOfStatement') declareIteration(model, node, current);
   if (kind === 'CatchClause') {
     current = { owner: scope.owner, parent: scope, names: new Map() };
     declare(model, current, record(node['param']), {}, false, true);
@@ -278,6 +312,7 @@ export const buildPurityModel = (file: AnalyzedFile): PurityModel => {
     module: `${file.source.path}:module`,
     bindings: new Map(),
     refs: new Map(),
+    nodeOwners: new Map(),
     functions: new Map(),
     functionNodes: new Map(),
     exports: new Map(),
@@ -288,6 +323,17 @@ export const buildPurityModel = (file: AnalyzedFile): PurityModel => {
   const scope: Scope = { owner: model.module, names: new Map() };
   const program = record(file.parsed.ast);
   walkModel(model, program, scope, {}, 0);
+  for (const fn of model.functions.values())
+    fn.captures = [
+      ...new Set(
+        [...model.refs]
+          .filter(
+            ([position, id]) =>
+              position >= fn.start && position < fn.end && model.bindings.get(id)?.owner !== fn.id,
+          )
+          .map(([, id]) => id),
+      ),
+    ];
   for (const binding of model.bindings.values())
     if (binding.specifier && !model.importsByName.has(binding.name))
       model.importsByName.set(binding.name, binding);

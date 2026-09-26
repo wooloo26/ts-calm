@@ -90,7 +90,8 @@ describe('checked branded values and presence', () => {
       forEach: map.forEach.bind(map),
       [Symbol.iterator]: map[Symbol.iterator].bind(map),
     });
-    expect(lookup(facade, 'zero')).toEqual(some(0));
+    expect(lookup(facade, 'zero')).toEqual(none());
+    expect(lookup(new Map(facade), 'zero')).toEqual(some(0));
     expect(lookup({ get: 1 }, 'get')).toEqual(some(1));
     expect(lookup({ get: (): void => {}, has: 1 }, 'has')).toEqual(some(1));
     const functionRecord = { get: (): void => {}, has: (): void => {} };

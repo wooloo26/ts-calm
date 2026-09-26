@@ -40,9 +40,10 @@ export const checkSourceProject = async (
 ): Promise<readonly Diagnostic[]> => {
   const config = configuration ?? loadConfiguration(root);
   const paths = projectPaths(root, config);
-  const files: SourceFile[] = paths
-    .filter((path) => selected(path, config))
-    .map((path) => ({ path, content: readFileSync(join(root, path), 'utf8') }));
+  const files: SourceFile[] = [];
+  for (const path of paths)
+    if (selected(path, config))
+      files.push({ path, content: readFileSync(join(root, path), 'utf8') });
   const analyzed = analyzeSources({ files }, config);
   const imports = resolveImports(root, analyzed, paths);
   return runAnalyzedChecks(analyzed, config, imports);

@@ -18,6 +18,16 @@ Every command accepts `--cwd <directory>` and `--json`. Exit codes: 0 passed, 1 
 violation, 2 execution or configuration error. The rules are listed in
 [docs/rules.md](../../docs/rules.md).
 
+Staged checks reuse installed third-party dependencies, but resolve workspace packages inside the
+index snapshot. Missing staged manifests or export targets fail explicitly. Installed dependencies
+must match the lockfile; the checker does not install or freeze third-party dependency contents.
+
+Purity analysis tracks known effects and common reference/collection operations. Unknown third-party
+behavior, dynamic dispatch, recursive allocation factories and recursive heap traversal remain
+unproven. An expansion budget bounds expensive call graphs and reports `purity/incomplete` warnings
+when exhausted; a successful exit alone is not a proof of purity. Configuration fields and exit
+codes are unchanged.
+
 ## API
 
 Exports `defineConfig`, `runChecks`, `analyzeSources`, `checkProject`, `checkSourceProject`,

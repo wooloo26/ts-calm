@@ -3,24 +3,42 @@ import { typeKind } from '#src/rules/purity/model';
 import type { Node } from '#src/core/parser.b';
 import type { PurityModel, FunctionModel, Binding } from '#src/rules/purity/model';
 
+export type FreshValue = Readonly<{
+  kind: 'fresh';
+  id: string;
+  shape: string;
+  slots: Map<string, readonly Value[]>;
+  spread: Value[];
+}>;
 export type Value =
   | Readonly<{ kind: 'unknown'; shape?: string }>
   | Readonly<{ kind: 'function'; id: string }>
   | Readonly<{ kind: 'external'; name: string }>
   | Readonly<{ kind: 'reference'; id: string; path: readonly string[]; shape: string }>
-  | Readonly<{
-      kind: 'fresh';
-      id: string;
-      shape: string;
-      slots: Map<string, readonly Value[]>;
-      spread: Value[];
-    }>;
+  | FreshValue;
 export type Frame = Readonly<{
   fn: FunctionModel;
   env: ReadonlyMap<string, readonly Value[]>;
   active: ReadonlySet<string>;
   chain: readonly string[];
+  summary: string;
+  allocation: number;
+  allocations: ReadonlyMap<string, number>;
 }>;
+export type FunctionSummary = {
+  id: string;
+  args: readonly (readonly Value[])[];
+  caller?: Frame;
+  values: readonly Value[];
+  active: boolean;
+  ready: boolean;
+  reusable: boolean;
+  recursive: boolean;
+  invalidated: boolean;
+  dependents: Set<string>;
+  recursion: string;
+  revision: number;
+};
 export type Effect = Readonly<{
   message: string;
   offset: number;
@@ -35,6 +53,14 @@ export type Evaluation = {
   fresh: Map<string, Value>;
   calls: Map<Frame, Map<string, readonly Value[]>>;
   activeCalls: Map<Frame, Set<string>>;
+  summaries: Map<string, FunctionSummary>;
+  pending: Set<string>;
+  stack: string[];
+  expansions: number;
+  cacheHits: number;
+  revision: number;
+  reads: Set<string>;
+  incomplete: boolean;
 };
 export type Project = Readonly<{
   models: ReadonlyMap<string, PurityModel>;
@@ -53,7 +79,7 @@ export const valueKey = (value: Value): string =>
       ? value.id
       : value.kind === 'external'
         ? value.name
-        : '?';
+        : `?${value.shape ?? ''}`;
 export const unique = (values: readonly Value[]): readonly Value[] => {
   if (values.length < 2) return values;
   const seen = new Map<string, Value>();
@@ -103,12 +129,18 @@ export const referenceShape = (
 ): string => {
   let current = expand(binding.annotation, model, project);
   for (const key of path) {
+    if (typeKind(current.node) === 'array' && (key === '*' || /^\d+$/.test(key))) {
+      const argumentsNode = record(current.node['typeArguments'] ?? current.node['typeParameters']);
+      const element = record(current.node['elementType'] ?? children(argumentsNode)[0]?.node);
+      current = expand(element, current.model, project);
+      continue;
+    }
     const property = children(current.node)
       .map((entry) => entry.node)
       .find((entry) => text(record(entry['key']), 'name') === key);
     current = expand(record(property?.['typeAnnotation']), current.model, project);
   }
-  return path.length === 0 ? binding.type : typeKind(current.node);
+  return typeKind(current.node) || (path.length === 0 ? binding.type : '');
 };
 
 export const property = (value: Value, key: string, project: Project): readonly Value[] => {
@@ -129,6 +161,14 @@ export const property = (value: Value, key: string, project: Project): readonly 
     ];
   }
   if (value.kind === 'fresh') {
+    if (key === '*') {
+      const values = unique(
+        [...value.slots.values()]
+          .flat()
+          .concat(value.spread.flatMap((entry) => property(entry, key, project))),
+      );
+      return values.length ? values : [unknown];
+    }
     const own = value.slots.get(key) ?? value.slots.get('*');
     if (own) return own;
     if (value.spread.length)

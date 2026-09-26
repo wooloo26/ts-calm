@@ -1,8 +1,9 @@
 import { record, text, offset, children, functionNode, effectName } from '#src/core/parser.b';
-import { property, unique, unknown, fnForExport } from '#src/rules/purity/values';
+import { property, unique, unknown, fnForExport, referenceShape } from '#src/rules/purity/values';
 import type { Node } from '#src/core/parser.b';
 import type { FunctionModel, PurityModel, Binding } from '#src/rules/purity/model';
 import { typeKind } from '#src/rules/purity/model';
+import { summaryContext, reusableReturn, sameValues } from '#src/rules/purity/summaries';
 import type { Value, Frame, Evaluation, Project } from '#src/rules/purity/values';
 
 type Context = Readonly<{
@@ -10,6 +11,7 @@ type Context = Readonly<{
   evaluation: Evaluation;
   changed: ReadonlySet<string>;
   root: string;
+  maximumExpansions: number;
 }>;
 const arrayMethods = [
   'push',
@@ -23,6 +25,18 @@ const arrayMethods = [
   'fill',
 ];
 const collectionMethods = ['set', 'add', 'delete', 'clear'];
+const branchingNodes = [
+  'IfStatement',
+  'ConditionalExpression',
+  'LogicalExpression',
+  'SwitchStatement',
+  'ForStatement',
+  'ForOfStatement',
+  'ForInStatement',
+  'WhileStatement',
+  'DoWhileStatement',
+  'TryStatement',
+];
 const objectMutators = [
   'Object.freeze',
   'Object.seal',
@@ -46,6 +60,7 @@ const callbackMethods = [
   'reduce',
   'reduceRight',
   'sort',
+  'toSorted',
 ];
 const fpCallbacks: Readonly<Record<string, readonly number[]>> = {
   capture: [0],
@@ -150,7 +165,14 @@ const bindingValue = (
       return bindingValue(context, frame, model, original, new Set([...seen, binding.id]));
   }
   if (binding.parameter || !frame.active.has(binding.owner))
-    return [{ kind: 'reference', id: binding.id, path: [], shape: binding.type }];
+    return [
+      {
+        kind: 'reference',
+        id: binding.id,
+        path: [],
+        shape: referenceShape(binding, [], model, context.project),
+      },
+    ];
   if (seen.has(binding.id)) return [unknown];
   let values = unique(
     binding.values.flatMap((node) =>
@@ -168,7 +190,10 @@ const fresh = (
   node: Node,
   seen: ReadonlySet<string>,
 ): readonly Value[] => {
-  const id = `${context.root}:${frame.fn.id}:${offset(node)}:${offset(node, 'end')}`;
+  const owner = modelFor(context, frame);
+  const scope = owner ? (owner.nodeOwners.get(offset(node)) ?? frame.fn.id) : frame.fn.id;
+  const allocation = frame.allocations.get(scope) ?? frame.allocation;
+  const id = `${context.root}:${allocation}:${scope}:${offset(node)}:${offset(node, 'end')}`;
   const cached = context.evaluation.fresh.get(id);
   if (cached) return [cached];
   const kind = text(node, 'type'),
@@ -290,6 +315,7 @@ const read = (context: Context, frame: Frame, node: Node): void => {
     }
     if (value.kind === 'reference') {
       const binding = context.project.bindings.get(value.id);
+      context.evaluation.reads.add(value.id);
       if (binding && !binding.parameter && (binding.mutable || context.changed.has(binding.id)))
         effect(context, frame, `read changing ${binding.name}`, node, binding.id);
     }
@@ -313,7 +339,7 @@ const invoke = (
         if (known) effect(context, frame, known, node);
         if (name === 'Date' && (node['type'] === 'CallExpression' || args.length === 0))
           effect(context, frame, 'current time', node);
-        const match = /^ts-calm(?:\/boundary)?:([^.]+)$/.exec(name);
+        const match = /^@ts-calm\/fp(?:\/boundary)?:([^.]+)$/.exec(name);
         if (match)
           for (const index of fpCallbacks[match[1] ?? ''] ?? [])
             invoke(context, frame, args[index] ?? [], [[unknown]], node);
@@ -332,12 +358,49 @@ const mutateCollection = (
   args: readonly (readonly Value[])[],
   node: Node,
 ): void => {
+  context.evaluation.revision += 1;
   write(context, frame, receiver, node);
   for (const value of receiver)
     if (value.kind === 'fresh' && ['push', 'unshift', 'splice', 'set', 'add'].includes(method)) {
       const inserted = method === 'set' ? (args[1] ?? []) : args.flat();
       value.slots.set('*', unique([...(value.slots.get('*') ?? []), ...inserted]));
     }
+};
+
+/** @impure Register a new collection result in the current analysis allocation table. */
+const collectionResult = (
+  context: Context,
+  frame: Frame,
+  node: Node,
+  elements: readonly Value[],
+  seen: ReadonlySet<string>,
+): readonly Value[] => {
+  const allocated = fresh(
+    context,
+    frame,
+    {
+      type: 'ArrayExpression',
+      start: offset(node),
+      end: offset(node, 'end'),
+      elements: [],
+    },
+    seen,
+  );
+  for (const value of allocated) if (value.kind === 'fresh') value.slots.set('*', elements);
+  return allocated;
+};
+
+const collectionArguments = (
+  context: Context,
+  method: string,
+  collections: readonly Value[],
+  args: readonly (readonly Value[])[],
+): readonly (readonly Value[])[] => {
+  const elements = access(context, collections, '*');
+  if (method === 'sort' || method === 'toSorted') return [elements, elements];
+  if (method === 'reduce' || method === 'reduceRight')
+    return [args[1] ?? elements, elements, [unknown], collections];
+  return [elements, [unknown], collections];
 };
 
 /** @impure Evaluate a known call in the current analysis context. */
@@ -363,6 +426,7 @@ const call = (
     result = fresh(context, frame, node, seen);
     if (name === 'Date' && args.length === 0) effect(context, frame, 'current time', node);
   } else if (objectMutators.includes(name)) {
+    context.evaluation.revision += 1;
     write(context, frame, args[0] ?? [], node);
     result = args[0] ?? [unknown];
     if (name === 'Object.assign')
@@ -381,31 +445,31 @@ const call = (
       if (collections.length) {
         if (arrayMethods.includes(method) || collectionMethods.includes(method))
           mutateCollection(context, frame, collections, method, args, node);
-        if (callbackMethods.includes(method))
-          invoke(
-            context,
-            frame,
-            args[0] ?? [],
-            [access(context, collections, '*'), [unknown]],
-            node,
-          );
+        const transformed = callbackMethods.includes(method)
+          ? invoke(
+              context,
+              frame,
+              args[0] ?? [],
+              collectionArguments(context, method, collections, args),
+              node,
+            )
+          : [unknown];
         if (['get', 'at', 'pop', 'shift', 'find'].includes(method))
           result = access(context, collections, '*');
         if (['slice', 'toSorted', 'toReversed', 'filter', 'map', 'flatMap'].includes(method)) {
-          const allocated = fresh(
-            context,
-            frame,
-            {
-              type: 'ArrayExpression',
-              start: offset(node),
-              end: offset(node, 'end'),
-              elements: [],
-            },
-            seen,
-          );
-          for (const value of allocated)
-            if (value.kind === 'fresh') value.slots.set('*', access(context, collections, '*'));
-          result = allocated;
+          const elements =
+            method === 'map'
+              ? transformed
+              : method === 'flatMap'
+                ? unique(
+                    transformed.flatMap((item) =>
+                      (item.kind === 'fresh' || item.kind === 'reference') && item.shape === 'array'
+                        ? property(item, '*', context.project)
+                        : [item],
+                    ),
+                  )
+                : access(context, collections, '*');
+          result = collectionResult(context, frame, node, elements, seen);
         }
       }
       if (
@@ -441,7 +505,14 @@ const cachedCalls = (
 };
 
 /** @impure Traverse one body and collect observed effects in its private analysis result. */
-const visit = (context: Context, frame: Frame, node: Node, parent: Node, key: string): void => {
+const visit = (
+  context: Context,
+  frame: Frame,
+  node: Node,
+  parent: Node,
+  key: string,
+  conditional = false,
+): void => {
   const kind = text(node, 'type');
   if (functionNode(node)) return;
   if (kind === 'CallExpression' || kind === 'NewExpression') call(context, frame, node, new Set());
@@ -462,7 +533,43 @@ const visit = (context: Context, frame: Frame, node: Node, parent: Node, key: st
           node,
           true,
         );
-    } else write(context, frame, resolveValue(context, frame, target), node);
+    } else {
+      const key = target['computed']
+        ? literalKey(record(target['property']))
+        : keyOf(record(target['property']));
+      const receivers =
+        target['type'] === 'MemberExpression'
+          ? resolveValue(context, frame, record(target['object']))
+          : resolveValue(context, frame, target);
+      write(
+        context,
+        frame,
+        receivers.map((value) =>
+          value.kind === 'reference' ? { ...value, path: [...value.path, key] } : value,
+        ),
+        node,
+      );
+      if (kind === 'AssignmentExpression' && target['type'] === 'MemberExpression') {
+        context.evaluation.revision += 1;
+        const values = resolveValue(context, frame, record(node['right']));
+        for (const owner of receivers)
+          if (owner.kind === 'fresh') {
+            const local = owner.id.startsWith(
+              `${context.root}:${frame.allocation}:${frame.fn.id}:`,
+            );
+            const replace =
+              local &&
+              !conditional &&
+              key !== '*' &&
+              receivers.length === 1 &&
+              node['operator'] === '=';
+            owner.slots.set(
+              key,
+              replace ? values : unique([...(owner.slots.get(key) ?? []), ...values]),
+            );
+          }
+      }
+    }
   }
   const isKey =
     (key === 'property' && !parent['computed']) ||
@@ -470,19 +577,20 @@ const visit = (context: Context, frame: Frame, node: Node, parent: Node, key: st
     key === 'id' ||
     key === 'typeAnnotation';
   if ((kind === 'Identifier' && !isKey) || kind === 'MemberExpression') read(context, frame, node);
+  const branching = conditional || branchingNodes.includes(kind);
   for (const child of children(node))
-    if (child.key !== 'typeAnnotation') visit(context, frame, child.node, node, child.key);
+    if (child.key !== 'typeAnnotation')
+      visit(context, frame, child.node, node, child.key, branching);
 };
 
 /** @impure Track calls and their externally visible effects for a single root function. */
-export const evaluateFunction = (
+const executeFunction = (
   context: Context,
-  id: string,
+  fn: FunctionModel,
+  summary: string,
   args: readonly (readonly Value[])[] = [],
   caller?: Frame,
 ): readonly Value[] => {
-  const fn = context.project.functions.get(id);
-  if (!fn || caller?.active.has(id)) return [unknown];
   const env = new Map(caller?.env);
   for (const parameter of fn.params) {
     let value = args[parameter.index];
@@ -492,10 +600,13 @@ export const evaluateFunction = (
   const frame: Frame = {
     fn,
     env,
-    active: new Set([...(caller?.active ?? []), id]),
+    active: new Set([...(caller?.active ?? []), fn.id]),
     chain: [...(caller?.chain ?? []), `${fn.file}:${fn.name || '<callback>'}`],
+    summary,
+    allocation: context.evaluation.expansions,
+    allocations: new Map([...(caller?.allocations ?? []), [fn.id, context.evaluation.expansions]]),
   };
-  context.evaluation.executed.add(id);
+  context.evaluation.executed.add(fn.id);
   nodes(fn.node['params']).forEach((parameter, index) => {
     const supplied = args[index];
     if (
@@ -540,10 +651,100 @@ export const evaluateFunction = (
   );
 };
 
+/** @impure Reuse contextual summaries and schedule recursive return dependencies until stable. */
+export const evaluateFunction = (
+  context: Context,
+  id: string,
+  args: readonly (readonly Value[])[] = [],
+  caller?: Frame,
+): readonly Value[] => {
+  const fn = context.project.functions.get(id);
+  if (!fn) return [unknown];
+  const description = summaryContext(context.project, fn, args, caller);
+  let key = description.key;
+  const { borrowed, recursion } = description;
+  const evaluation = context.evaluation;
+  const recursive = evaluation.stack.find((entry) => {
+    const previous = evaluation.summaries.get(entry);
+    return previous?.id === id && previous.recursion === recursion;
+  });
+  if (recursive) key = recursive;
+  let summary = evaluation.summaries.get(key);
+  if (!summary) {
+    summary = {
+      id,
+      args,
+      ...(caller ? { caller } : {}),
+      values: [],
+      active: false,
+      ready: false,
+      reusable: false,
+      recursive: false,
+      invalidated: false,
+      dependents: new Set(),
+      recursion,
+      revision: 0,
+    };
+    evaluation.summaries.set(key, summary);
+  }
+  if (caller) summary.dependents.add(caller.summary);
+  if (summary.active) {
+    for (const active of evaluation.stack.slice(evaluation.stack.indexOf(key))) {
+      const member = evaluation.summaries.get(active);
+      if (member) member.recursive = true;
+    }
+    return summary.values;
+  }
+  // Recursive factories with changing private allocations remain outside the bounded model.
+  if (borrowed && caller?.active.has(id)) return [unknown];
+  if (
+    summary.ready &&
+    summary.reusable &&
+    !summary.invalidated &&
+    summary.revision === evaluation.revision
+  ) {
+    evaluation.cacheHits += 1;
+    return summary.values;
+  }
+  if (evaluation.expansions >= context.maximumExpansions) {
+    evaluation.incomplete = true;
+    return [unknown];
+  }
+  summary.active = true;
+  const propagating = summary.invalidated;
+  summary.invalidated = false;
+  evaluation.stack.push(key);
+  evaluation.expansions += 1;
+  const revision = evaluation.revision;
+  const returned = executeFunction(context, fn, key, args, caller);
+  const reusable = reusableReturn(returned, context.project);
+  const values = summary.recursive
+    ? reusable && returned.every((value) => value.kind !== 'fresh')
+      ? unique([...summary.values, ...returned])
+      : [unknown]
+    : returned;
+  summary.active = false;
+  evaluation.stack.pop();
+  summary.ready = true;
+  summary.reusable = !borrowed && reusable && evaluation.revision === revision;
+  summary.revision = evaluation.revision;
+  if ((summary.recursive || propagating) && !sameValues(summary.values, values))
+    for (const dependent of summary.dependents) {
+      const target = evaluation.summaries.get(dependent);
+      if (target && !target.active) {
+        target.invalidated = true;
+        evaluation.pending.add(dependent);
+      }
+    }
+  summary.values = values;
+  return values;
+};
+
 export const evaluatePurity = (
   project: Project,
   fn: FunctionModel,
   changed: ReadonlySet<string>,
+  maximumExpansions = 512,
 ): Evaluation => {
   const evaluation: Evaluation = {
     effects: new Map(),
@@ -552,7 +753,29 @@ export const evaluatePurity = (
     fresh: new Map(),
     calls: new Map(),
     activeCalls: new Map(),
+    summaries: new Map(),
+    pending: new Set(),
+    stack: [],
+    expansions: 0,
+    cacheHits: 0,
+    revision: 0,
+    reads: new Set(),
+    incomplete: false,
   };
-  evaluateFunction({ project, evaluation, root: fn.id, changed }, fn.id);
+  const context = { project, evaluation, root: fn.id, changed, maximumExpansions };
+  evaluateFunction(context, fn.id);
+  for (const key of evaluation.pending) {
+    evaluation.pending.delete(key);
+    const summary = evaluation.summaries.get(key);
+    if (!summary) continue;
+    summary.ready = false;
+    evaluateFunction(context, summary.id, summary.args, summary.caller);
+  }
+  // Retain report facts and counters, not temporary abstract heaps and call frames.
+  evaluation.fresh.clear();
+  evaluation.calls.clear();
+  evaluation.activeCalls.clear();
+  evaluation.summaries.clear();
+  evaluation.pending.clear();
   return evaluation;
 };

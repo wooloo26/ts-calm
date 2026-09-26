@@ -22,11 +22,7 @@ const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonl
       );
   });
 
-const maximumRounds = 3;
-const sameMembers = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean =>
-  left.size === right.size && [...left].every((item) => right.has(item));
-
-const projectOf = (
+export const projectOf = (
   files: readonly AnalyzedFile[],
   imports: readonly ResolvedImport[],
   config: CheckConfig,
@@ -56,29 +52,34 @@ const settle = (
   project: Project,
   candidates: readonly FunctionModel[],
 ): ReadonlyMap<string, Evaluation> => {
-  let changed = new Set<string>(),
-    declared = new Set<string>(),
+  const changed = new Set<string>(),
     results = new Map<string, Evaluation>();
-  for (let round = 0; round < maximumRounds; round += 1) {
-    const scope = declared.size > 0 ? { ...project, declared } : project;
-    const nextChanged = new Set<string>();
-    results = new Map();
-    for (const fn of candidates) {
-      const evaluation = evaluatePurity(scope, fn, changed);
-      results.set(fn.id, evaluation);
-      for (const binding of evaluation.writes) nextChanged.add(binding);
+  const pending = new Set(candidates);
+  for (const fn of pending) {
+    pending.delete(fn);
+    const evaluation = evaluatePurity(project, fn, changed);
+    results.set(fn.id, evaluation);
+    for (const binding of evaluation.writes) {
+      if (changed.has(binding)) continue;
+      changed.add(binding);
+      for (const dependent of candidates)
+        if (results.get(dependent.id)?.reads.has(binding)) pending.add(dependent);
     }
-    const nextDeclared = new Set(
-      candidates
-        .filter((fn) => fn.annotated && fn.reason && results.get(fn.id)?.effects.size === 0)
-        .map((fn) => fn.id),
-    );
-    const stable = sameMembers(nextChanged, changed) && sameMembers(nextDeclared, declared);
-    changed = nextChanged;
-    declared = nextDeclared;
-    if (stable) break;
   }
-  return results;
+  const declared = new Set(
+    candidates
+      .filter(
+        (fn) =>
+          fn.annotated &&
+          fn.reason &&
+          !results.get(fn.id)?.incomplete &&
+          results.get(fn.id)?.effects.size === 0,
+      )
+      .map((fn) => fn.id),
+  );
+  if (declared.size === 0) return results;
+  const scope = { ...project, declared };
+  return new Map(candidates.map((fn) => [fn.id, evaluatePurity(scope, fn, changed)]));
 };
 
 export const checkPurity = (
@@ -93,10 +94,16 @@ export const checkPurity = (
   );
   const results = settle(project, candidates);
   const diagnostics: Diagnostic[] = [];
+  const incomplete = new Map<string, string[]>();
   for (const fn of candidates) {
     const model = project.models.get(fn.file),
       result = results.get(fn.id);
     if (!model || !result) continue;
+    if (result.incomplete) {
+      const names = incomplete.get(fn.file) ?? [];
+      names.push(fn.name || '<callback>');
+      incomplete.set(fn.file, names);
+    }
     if (fn.annotated && !fn.reason)
       diagnostics.push(
         diagnostic(
@@ -132,6 +139,19 @@ export const checkPurity = (
         .join('\n'),
       docs: 'https://github.com/wooloo26/ts-calm/blob/main/docs/rules.md#purity',
     });
+  }
+  for (const [path, names] of incomplete) {
+    const file = project.models.get(path)?.file;
+    if (file)
+      diagnostics.push(
+        diagnostic(
+          file.source,
+          'purity/incomplete',
+          `Purity analysis reached its context budget in ${names.slice(0, 4).join(', ')}${names.length > 4 ? ' and other functions' : ''}; unvisited calls remain unproven.`,
+          0,
+          'warning',
+        ),
+      );
   }
   return [...diagnostics, ...misplaced([...project.models.values()], config)];
 };
