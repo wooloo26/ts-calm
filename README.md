@@ -1,13 +1,38 @@
 # ts-calm
 
-Small conventions for personal TypeScript projects, split into two packages. Node 24+, ESM, MIT.
-This repository is a template: copy it, then change what you need. Nothing here is published to npm.
-[中文](README.zh-CN.md) · [Rule guide](docs/rules.md)
+Private TypeScript workspace template: functional runtime, source-rule checker and its own
+toolchain. Node 24+, ESM, MIT. Nothing is published — copy the repository and edit it.
 
-| Package                                      | Role                              |
-| -------------------------------------------- | --------------------------------- |
-| [`@ts-calm/fp`](packages/fp/README.md)       | Runtime: Option, Result, guards   |
-| [`@ts-calm/check`](packages/check/README.md) | Tool: the `ts-calm` check command |
+## Features
+
+| Package                                      | Provides                                       |
+| -------------------------------------------- | ---------------------------------------------- |
+| [`@ts-calm/fp`](packages/fp/README.md)       | Option, Result, combinators, guards, codecs    |
+| [`@ts-calm/check`](packages/check/README.md) | Source rules, pinned `typecheck`, reusable API |
+
+- Source rules: commit message, function length, boundary, file cycles, directory cycles, strict-fp
+  and purity — see [docs/rules.md](docs/rules.md).
+- Pure by default: mark known effects `/** @impure reason */`; real host effects live in documented
+  `.b.ts` files.
+- Package-internal imports are relative and keep the `.ts` extension.
+- Formatting and linting stay project scripts: `oxfmt` and `oxlint` are never bundled.
+
+## Commands
+
+| Command                              | Purpose                                                |
+| ------------------------------------ | ------------------------------------------------------ |
+| `pnpm verify`                        | build, typecheck, check, lint, fmt:check, test         |
+| `pnpm build` / `pnpm typecheck`      | turbo `fp -> check` / per package                      |
+| `pnpm check` / `pnpm check --staged` | source rules on the tree or on the Git index           |
+| `pnpm lint` / `pnpm fmt`             | `oxlint --type-aware .` / `oxfmt --write .`            |
+| `pnpm test` / `pnpm test:coverage`   | vitest over `packages/*/tests` and coverage thresholds |
+| `pnpm bench`                         | vitest benchmarks                                      |
+| `pnpm docs`                          | regenerate `docs/rules.md` from the rule help          |
+| `pnpm commit-message --file <path>`  | check `scope - verb description`                       |
+
+`packages/check` owns the `ts-calm` binary: `check [--staged]`, `typecheck`, `init`, `explain <rule>`
+and `commit-message --file <path>`, each accepting `--json` and `--cwd <directory>`. Exit codes:
+0 passed, 1 error-severity violation, 2 execution or configuration error.
 
 ## Use as a template
 
@@ -19,67 +44,6 @@ pnpm install
 pnpm verify
 ```
 
-A ZIP download works the same way: unpack it, drop the `.git` directory and run `pnpm install`.
-A copy carries every workspace-level file verbatim: the source rules, compiler project, test runner,
-task runner, package manager settings, Lefthook hooks and editor defaults. `pnpm install` links
-`@ts-calm/fp` and `@ts-calm/check` from `packages/`, so nothing is fetched from the npm registry.
-
-Edit these first:
-
-- The root `package.json`: `name`, `description` and any script you do not want.
-- `ts-calm.config.ts`: the `commit-message` scopes and the allowed effect imports.
-- `packages/`: keep, rename or delete the two example packages. Imports of `@ts-calm/fp` and
-  `@ts-calm/check` keep resolving through the workspace as long as those directories are there.
-
-The runtime and the tool are separate packages. The checker owns its source rules and the compiler
-invocation: the project's own `tsconfig.json` drives `typecheck`, and formatting and linting stay the
-project's own scripts. Package management, builds and tests stay yours.
-
-## Commands and features
-
-| Command                        | Purpose                                                        |
-| ------------------------------ | -------------------------------------------------------------- |
-| `check` / `check --staged`     | The source rules, on the working tree or on a frozen Git index |
-| `typecheck`                    | The pinned compiler over the project's own `tsconfig.json`     |
-| `init`                         | Add a missing ESM `type` without replacing existing choices    |
-| `explain <rule>`               | Explain a rule and its functional alternative                  |
-| `commit-message --file <path>` | Check `scope - verb description`, e.g. `fp - add safe guards`  |
-
-Commands support `--cwd` and `--json`. Exit codes: 0 passed, 1 at least one error-severity
-violation, 2 execution/config errors. Warnings are reported without failing.
-Formatting (`oxfmt --write .`, `oxfmt --check .`) and linting (`oxlint --type-aware .`) stay project
-scripts, because a workspace runs them once for every package.
-
-- `@ts-calm/fp`: Result, Option, combinators, safe guards, collection helpers and codecs.
-- `@ts-calm/fp/boundary`: capture/captureAsync and their Result variants.
-- `@ts-calm/check`: reusable checking APIs and `CheckConfig`.
-- Source rules: commit message, function length, boundary, file cycles, directory cycles, strict-fp and purity.
-- Inside a package, imports are relative and keep the `.ts` extension. Node-only `#` mappings are
-  not readable by browsers, so a runtime package meant for the web does not use them.
-
-Functions follow a pure-by-default convention. Mark known effects with `/** @impure reason */`.
-Local loops and private data construction are allowed. This is bounded detection, not a proof
-about arbitrary JavaScript. Direct host effects still belong in documented `.b.ts` files.
-Prefer `fromNullable`, `capture`, guards and Option/Result handling before adding exceptions.
-
-## Working on this workspace
-
-This repository is a pnpm workspace: the two packages plus this private root.
-
-```sh
-pnpm install
-pnpm build       # turbo: fp -> check
-pnpm typecheck   # every package
-pnpm check       # the source rules for the whole workspace
-pnpm test        # vitest over packages/*/tests
-pnpm verify      # build, typecheck, check, lint, fmt:check and test
-```
-
-Additional gates: `pnpm test:coverage` and `pnpm bench`. Reports stay in `.local/reports`.
-`pnpm install` also wires the Lefthook hooks: `pre-commit` formats and checks the staged files, and
-`commit-msg` checks the commit message.
-
-Changes here become the next project's starting point, so behavior changes use TDD:
-failing test, implementation, refactor. No test ritual for prose edits. Update the generated guide
-with `pnpm run docs` after editing rule explanations; a test keeps `docs/rules.md` in step with the
-rule help. That file is generated, so `pnpm fmt` ignores it.
+Edit the root `package.json`, the scopes in `ts-calm.config.ts`, and `packages/` — keep, rename or
+delete the two example packages. Changes here become the next project's starting point: behavior
+changes use TDD, and `pnpm run docs` keeps `docs/rules.md` in step with the rule help.

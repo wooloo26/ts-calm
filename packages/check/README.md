@@ -1,28 +1,8 @@
 # @ts-calm/check
 
-The source-rule checker for calm TypeScript projects: commit message, function length, boundary,
-file cycles, directory cycles, strict-fp and purity, with a pinned compiler for `typecheck`.
-Node 24+, ESM, MIT.
-
-This package depends on `oxc-parser`, `oxc-resolver` and `typescript`: the parser and resolver back
-the source rules, and `typecheck` runs this pinned compiler instead of whatever the project happens
-to have. It carries no formatter, linter or compiler configuration; those belong to the project's
-own toolchain.
-
-## Use
-
-This package lives at `packages/check` in the template, and `pnpm install` links it as
-`@ts-calm/check`; there is nothing to add.
-
-```sh
-pnpm install
-pnpm exec ts-calm init
-pnpm exec ts-calm typecheck
-pnpm exec ts-calm check
-```
-
-`init` only adds a missing ESM `type` to `package.json`. A project provides its own `tsconfig.json`
-for `typecheck`; this workspace ships one at the root.
+Source-rule checker and pinned-compiler `typecheck` for calm TypeScript projects. Node 24+, ESM, MIT.
+It depends on `oxc-parser`, `oxc-resolver` and `typescript`, and carries no formatter, linter or
+compiler configuration of its own.
 
 ## Commands
 
@@ -34,29 +14,16 @@ for `typecheck`; this workspace ships one at the root.
 | `explain <rule>`               | Explain a rule and its functional alternative                  |
 | `commit-message --file <path>` | Check `scope - verb description`, e.g. `fp - add safe guards`  |
 
-Commands support `--cwd` and `--json`. Exit codes: 0 passed, 1 at least one error-severity
-violation, 2 execution or configuration errors. Warnings are reported without failing.
-
-`check` reports only the rules this tool owns. Formatting, linting and the compiler configuration
-stay with the project's own toolchain: a project runs its formatter and linter binaries directly,
-and this workspace's root scripts wire both up around `ts-calm check`.
+Every command accepts `--cwd <directory>` and `--json`. Exit codes: 0 passed, 1 error-severity
+violation, 2 execution or configuration error. The rules are listed in
+[docs/rules.md](../../docs/rules.md).
 
 ## API
 
-`@ts-calm/check` exports `defineConfig`, `runChecks`, `analyzeSources`, `checkProject`,
-`checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject`, `typecheckProject`,
-`validateCommitMessage`, `formatDiagnostics`, `initializeProject`, `explainRule`, plus the
-`CheckConfig`, `Diagnostic`, `RuleName`, `InitResult`, `CheckInput`, `SourceFile`, `StrictCheck`,
-`ResolvedImport`, `ImportResolution` and `ImportFact` types and
-`validateConfiguration`/`loadConfiguration`.
-
-`checkProject`, `checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject` and
-`initializeProject` are asynchronous and return promises. `checkProject` applies only the source
-rules; `typecheckProject` runs the pinned compiler over the project's own configuration. There is
-no in-process formatter or linter: projects run their own.
-
-## Rules
-
-See the repository rule guide at `docs/rules.md`.
-
-Every exported symbol is documented and that coverage is enforced by a test in this package.
+Exports `defineConfig`, `runChecks`, `analyzeSources`, `checkProject`, `checkSourceProject`,
+`checkStaged`, `checkStagedMessage`, `withStagedProject`, `typecheckProject`, `validateCommitMessage`,
+`formatDiagnostics`, `initializeProject`, `explainRule`, `validateConfiguration`/`loadConfiguration`,
+plus the `CheckConfig`, `Diagnostic`, `RuleName`, `InitResult`, `CheckInput`, `SourceFile`,
+`StrictCheck`, `ResolvedImport`, `ImportResolution` and `ImportFact` types. `checkProject`,
+`checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject` and `initializeProject`
+are asynchronous. Every exported symbol is documented, enforced by a test in this package.
