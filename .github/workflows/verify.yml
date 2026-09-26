@@ -42,9 +42,11 @@ jobs:
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          mkdir -p .local
           git log -1 --format=%B "$COMMIT_SHA" > .local/commit-message
           pnpm commit-message --file .local/commit-message
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: verify-${{ matrix.os }}
           path: |
