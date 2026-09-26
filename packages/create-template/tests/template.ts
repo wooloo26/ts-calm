@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   bundledTemplateOptions,
   initializeWorkspace,
   workspaceTemplate,
 } from '@ts-calm/create-template';
+import { packageManagerVersion, toolchainVersions } from '../src/toolchain.ts';
+
+const repository = fileURLToPath(new URL('../../..', import.meta.url));
+const manifest = (path: string): Record<string, unknown> =>
+  JSON.parse(readFileSync(join(repository, path), 'utf8'));
 
 describe('pnpm + Turbo template', () => {
   it('renders the same files for the same options', () => {
@@ -21,9 +27,71 @@ describe('pnpm + Turbo template', () => {
     expect(workspaceTemplate(options).length).toBeGreaterThan(10);
   });
 
-  it('resolves the versions this package was published with', () => {
-    const options = bundledTemplateOptions();
-    for (const value of Object.values(options)) expect(value).toMatch(/^\d+\.\d+\.\d+/);
+  it('pins the versions it was published with', () => {
+    for (const value of Object.values(bundledTemplateOptions()))
+      expect(value).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('keeps the pinned toolchain identical to the manifests that own it', () => {
+    const root = manifest('package.json');
+    const check = manifest('packages/check/package.json');
+    const fp = manifest('packages/fp/package.json');
+    const dependencies = check['dependencies'] as Record<string, string>;
+    // The formatter and linter belong to the repository and to a generated workspace, not to a
+    // published package, so the root manifest owns those pins.
+    const rootDev = root['devDependencies'] as Record<string, string>;
+    expect(toolchainVersions.fp).toBe(fp['version']);
+    expect(toolchainVersions.check).toBe(check['version']);
+    expect(toolchainVersions.typescript).toBe(dependencies['typescript']);
+    expect(toolchainVersions.oxfmt).toBe(rootDev['oxfmt']);
+    expect(toolchainVersions.oxlint).toBe(rootDev['oxlint']);
+    expect(toolchainVersions.oxlintTsgolint).toBe(rootDev['oxlint-tsgolint']);
+    expect(toolchainVersions.turbo).toBe(rootDev['turbo']);
+    expect(toolchainVersions.vitest).toBe(rootDev['vitest']);
+    expect(packageManagerVersion).toBe(root['packageManager']);
+  });
+
+  it('keeps the published packages free of the formatter and the linter', () => {
+    const forbidden = ['oxfmt', 'oxlint', 'oxlint-tsgolint'];
+    for (const name of ['fp', 'check', 'create-template']) {
+      const manifest_ = manifest(`packages/${name}/package.json`);
+      const sections = ['dependencies', 'peerDependencies', 'optionalDependencies'] as const;
+      for (const section of sections) {
+        const entries = manifest_[section] as Record<string, string> | undefined;
+        const declared = Object.keys(entries ?? {});
+        for (const tool of forbidden) expect(declared, `${name} ${section}`).not.toContain(tool);
+      }
+    }
+  });
+
+  it('depends on nothing at runtime', () => {
+    // A published generator that resolves a version or formats a file would need an install graph.
+    expect(manifest('packages/create-template/package.json')['dependencies']).toBeUndefined();
+  });
+
+  it('renders every JSON manifest as valid JSON', () => {
+    for (const file of workspaceTemplate(bundledTemplateOptions())) {
+      if (!file.path.endsWith('.json')) continue;
+      expect(() => JSON.parse(file.content), file.path).not.toThrow();
+    }
+  });
+
+  it('generates a runnable Vitest project list and a root compiler project', () => {
+    const files = new Map(
+      workspaceTemplate(bundledTemplateOptions()).map((f) => [f.path, f.content]),
+    );
+    expect(files.has('vitest.workspace.ts')).toBe(false);
+    expect(files.get('vitest.config.ts')).toContain('projects:');
+    expect(files.get('vitest.config.ts')).not.toContain('defineWorkspace');
+    const tsconfig = JSON.parse(files.get('tsconfig.json') ?? '{}');
+    expect(tsconfig.compilerOptions.customConditions).toEqual(['source']);
+    expect(tsconfig.include).toEqual([
+      '*.ts',
+      'packages/*/src/**/*.ts',
+      'packages/*/tests/**/*.ts',
+    ]);
+    const root = JSON.parse(files.get('package.json') ?? '{}');
+    expect(root.scripts.typecheck).toContain('tsc --noEmit -p tsconfig.json');
   });
 
   it('keeps internal imports relative so they also work in browsers', () => {

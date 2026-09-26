@@ -18,6 +18,13 @@ export const diagnostic = (
   };
 };
 
+/** The one ordering every reported diagnostic list uses. */
+export const byPosition = (left: Diagnostic, right: Diagnostic): number =>
+  left.file.localeCompare(right.file) ||
+  left.line - right.line ||
+  left.column - right.column ||
+  left.rule.localeCompare(right.rule);
+
 export const formatDiagnostics = (diagnostics: readonly Diagnostic[]): string =>
   diagnostics
     .map(

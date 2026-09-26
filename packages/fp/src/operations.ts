@@ -211,9 +211,12 @@ export function filter<Value, Problem, NextProblem>(
   predicate: (value: Value) => boolean,
   ...failures: [] | [(value: Value) => NextProblem]
 ): Option<Value> | Result<Value, Problem | NextProblem> {
-  if (failures.length === 1)
-    return isOk(value) && !predicate(get(value)) ? err(failures[0](get(value))) : value;
-  return isSome(value) && predicate(get(value)) ? value : none();
+  // Dispatch on the container, never on the argument count: a rejected `Option` must become
+  // `None` even when a caller also supplied the `Result` mapper.
+  const onFalse = failures[0];
+  if (!isResult(value)) return isSome(value) && predicate(get(value)) ? value : none();
+  if (!isOk(value) || predicate(get(value))) return value;
+  return onFalse ? err(onFalse(get(value))) : value;
 }
 
 /**

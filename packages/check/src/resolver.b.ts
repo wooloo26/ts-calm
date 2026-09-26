@@ -1,6 +1,7 @@
 /**
  * @boundary Resolve imports against the inspected filesystem and report unresolved dependencies explicitly.
  * @effects node:fs
+ * @effects oxc-resolver
  * @allow strict-fp/no-try -- Malformed package metadata or resolver failures become resolution diagnostics.
  */
 import { readFileSync, existsSync } from 'node:fs';

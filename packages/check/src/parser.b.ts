@@ -8,9 +8,12 @@ import { parseSync } from 'oxc-parser';
 import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from '#src/types';
 
 export type Node = Readonly<Record<string, unknown>>;
+export type Child = Readonly<{ key: string; node: Node }>;
 type Environment = ReadonlyMap<string, string>;
+/** Shared stand-in for a value that is not an AST node, so a miss allocates nothing. */
+const absent: Node = Object.freeze({});
 export const record = (value: unknown): Node =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Node) : {};
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Node) : absent;
 export const text = (node: Node, key: string): string =>
   typeof node[key] === 'string' ? node[key] : '';
 export const offset = (node: Node, key = 'start'): number =>
@@ -19,13 +22,30 @@ export const functionNode = (node: Node): boolean =>
   ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
     text(node, 'type'),
   );
-export const children = (node: Node): readonly Readonly<{ key: string; node: Node }>[] =>
-  Object.entries(node).flatMap(([key, value]) =>
-    (Array.isArray(value) ? value : [value])
-      .map(record)
-      .filter((child) => typeof child['type'] === 'string')
-      .map((child) => ({ key, node: child })),
-  );
+/**
+ * The parsed tree is immutable, and every rule walks it many times, so each node's child list is
+ * computed once and cached. The cache is weak, so a discarded program cannot be retained.
+ */
+const childCache = new WeakMap<Node, readonly Child[]>();
+export const children = (node: Node): readonly Child[] => {
+  const cached = childCache.get(node);
+  if (cached) return cached;
+  const result: Child[] = [];
+  for (const key of Object.keys(node)) {
+    const value: unknown = node[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const child = record(item);
+        if (typeof child['type'] === 'string') result.push({ key, node: child });
+      }
+      continue;
+    }
+    const child = record(value);
+    if (typeof child['type'] === 'string') result.push({ key, node: child });
+  }
+  childCache.set(node, result);
+  return result;
+};
 
 const bindingNames = (node: Node): readonly string[] => {
   if (node['type'] === 'Identifier') return [text(node, 'name')];
@@ -307,6 +327,7 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
           start: offset(node),
           bodyStart: offset(body),
           bodyEnd: offset(body, 'end'),
+          bodyBlock: text(body, 'type') === 'BlockStatement',
         });
       }
     }

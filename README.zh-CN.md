@@ -19,8 +19,10 @@ pnpm exec ts-calm typecheck
 pnpm exec ts-calm check
 ```
 
-运行时与工具是两个包。`@ts-calm/check` 带齐固定版本的编译器、lint、格式工具及其预设；
-导入 `@ts-calm/fp` 不会加载它们。包管理、构建和测试仍由项目决定。
+运行时与工具是两个包。`@ts-calm/check` 只带固定版本的 parser、resolver 和编译器；
+导入 `@ts-calm/fp` 不会加载它们。格式与 lint 仍由项目自己的脚本负责，所以两个包都不引入
+格式化器或 linter —— 只把它们各自的预设作为纯数据再导出。
+包管理、构建和测试仍由项目决定。
 
 ## 命令与功能
 
@@ -33,14 +35,14 @@ pnpm exec ts-calm check
 | `explain <规则>`               | 查看原因及函数式替代写法                                     |
 | `commit-message --file <路径>` | 检查 `scope - verb description`，例如 `fp - add safe guards` |
 
-支持 `--cwd`、`--json`。退出码：0 通过，1 代码问题，2 配置或执行失败。
+支持 `--cwd`、`--json`。退出码：0 通过，1 至少一条 error 级问题，2 配置或执行失败；warning 只报告，不判定失败。
 格式（`oxfmt --write .`、`oxfmt --check .`）和 lint（`oxlint --type-aware .`）保留为项目脚本，
 因为 workspace 每个包各跑一次。
 
 - `@ts-calm/fp`：Result、Option、组合函数、类型守卫、集合工具和 Codec。
 - `@ts-calm/fp/boundary`：capture/captureAsync 及其 Result 版本。
 - `@ts-calm/check`：检查 API 与 CheckConfig。
-- `@ts-calm/check/tsconfig.node.json`、`/oxlint`、`/oxfmt`、`/node`：内置预设。
+- `@ts-calm/check/tsconfig.node.json`、`/oxlint`、`/oxfmt`：内置预设。
 - 七条源码规则：提交消息、函数长度、边界、文件循环、目录循环、strict-fp、purity。
 - 包内使用相对路径并保留 `.ts` 后缀，Node、打包器和浏览器都能解析；只属于 Node 的 `#`
   映射浏览器读不到，所以面向 web 的运行时包不使用它。
@@ -83,14 +85,14 @@ npm publish packages/check --access public
 
 ```sh
 pnpm install
-pnpm build       # turbo：fp -> check -> create-template
+pnpm build       # turbo：fp -> create-template -> check
 pnpm typecheck   # 每个包
-pnpm check       # 整个 workspace 的格式、lint 与源码规则
+pnpm check       # 整个 workspace 的源码规则
 pnpm test        # vitest 跑 packages/*/tests
 pnpm verify      # build、typecheck、check、lint、fmt:check、test
 ```
 
-其他门禁：`pnpm test:coverage`、`pnpm test:mutation`（带 runner canary）、`pnpm bench`、
-`pnpm test:package`、`pnpm test:template`。报告在 `.local/reports`。
+其他门禁：`pnpm test:coverage`、`pnpm bench`、`pnpm test:package`、`pnpm test:template`。
+报告在 `.local/reports`。
 行为改动按 TDD：先失败测试，再实现，再重构。文档修改不硬凑测试。
-修改规则说明后用 `pnpm docs` 更新指南。
+修改规则说明后用 `pnpm run docs` 更新指南；有测试保证 `docs/rules.md` 与规则说明一致。

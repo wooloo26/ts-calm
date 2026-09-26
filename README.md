@@ -20,7 +20,9 @@ pnpm exec ts-calm check
 ```
 
 The runtime and the tool are separate packages. Installing `@ts-calm/check` brings the pinned
-compiler, linter and formatter plus their presets; importing `@ts-calm/fp` never loads them.
+parser, resolver and compiler; importing `@ts-calm/fp` never loads them. Formatting and linting
+stay the project's own scripts, so neither package pulls in a formatter or a linter — only their
+presets are re-exported, as data.
 Package management, builds and tests stay yours.
 
 ## Commands and features
@@ -34,14 +36,15 @@ Package management, builds and tests stay yours.
 | `explain <rule>`               | Explain a rule and its functional alternative                         |
 | `commit-message --file <path>` | Check `scope - verb description`, e.g. `fp - add safe guards`         |
 
-Commands support `--cwd` and `--json`. Exit codes: 0 passed, 1 violations, 2 execution/config errors.
+Commands support `--cwd` and `--json`. Exit codes: 0 passed, 1 at least one error-severity
+violation, 2 execution/config errors. Warnings are reported without failing.
 Formatting (`oxfmt --write .`, `oxfmt --check .`) and linting (`oxlint --type-aware .`) stay project
 scripts, because a workspace runs them once for every package.
 
 - `@ts-calm/fp`: Result, Option, combinators, safe guards, collection helpers and codecs.
 - `@ts-calm/fp/boundary`: capture/captureAsync and their Result variants.
 - `@ts-calm/check`: reusable checking APIs and `CheckConfig`.
-- `@ts-calm/check/tsconfig.node.json`, `/oxlint`, `/oxfmt`, `/node`: the bundled presets.
+- `@ts-calm/check/tsconfig.node.json`, `/oxlint`, `/oxfmt`: the bundled presets.
 - Source rules: commit message, function length, boundary, file cycles, directory cycles, strict-fp and purity.
 - Inside a package, imports are relative and keep the `.ts` extension. Node-only `#` mappings are
   not readable by browsers, so a runtime package meant for the web does not use them.
@@ -86,14 +89,15 @@ This repository is a pnpm workspace of the three packages plus this private root
 
 ```sh
 pnpm install
-pnpm build       # turbo: fp -> check -> create-template
+pnpm build       # turbo: fp -> create-template -> check
 pnpm typecheck   # every package
-pnpm check       # format, lint and source rules for the whole workspace
+pnpm check       # the source rules for the whole workspace
 pnpm test        # vitest over packages/*/tests
 pnpm verify      # build, typecheck, check, lint, fmt:check and test
 ```
 
-Additional gates: `pnpm test:coverage`, `pnpm test:mutation` (with a runner canary),
-`pnpm bench`, `pnpm test:package` and `pnpm test:template`. Reports stay in `.local/reports`.
+Additional gates: `pnpm test:coverage`, `pnpm bench`, `pnpm test:package` and `pnpm test:template`.
+Reports stay in `.local/reports`.
 Use TDD for behavior changes: failing test, implementation, refactor. No test ritual for prose edits.
-Update the generated guide with `pnpm docs` after editing rule explanations.
+Update the generated guide with `pnpm run docs` after editing rule explanations; a test keeps
+`docs/rules.md` in step with the rule help.

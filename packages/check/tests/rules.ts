@@ -188,12 +188,16 @@ describe('boundary declarations', () => {
 describe('function length', () => {
   const long = (lines: number) =>
     `export const f=()=>{\n${Array.from({ length: lines }, (_, i) => `const n${i}=${i};`).join('\n')}\n};`;
-  it('preserves the 80/150 effective-line thresholds', () => {
-    // Block braces are included, as in the original implementation.
-    expect(lint(long(78))).toEqual([]);
-    expect(lint(long(79))[0]?.severity).toBe('warning');
-    expect(lint(long(148))[0]?.severity).toBe('warning');
-    expect(lint(long(149))[0]?.severity).toBe('error');
+  it('counts only the body lines, so the threshold is exactly 80 and 150', () => {
+    expect(lint(long(80))).toEqual([]);
+    expect(lint(long(81))[0]?.severity).toBe('warning');
+    expect(lint(long(150))[0]?.severity).toBe('warning');
+    expect(lint(long(151))[0]?.severity).toBe('error');
+  });
+  it('does not count the declaration braces as lines', () => {
+    expect(lint('export const f=()=>{return 1};')).toEqual([]);
+    expect(lint('export function f(){return 1}')).toEqual([]);
+    expect(lint('export const f=()=>({\n  a: 1,\n})')).toEqual([]);
   });
   it('ignores comments, empty lines and nested function bodies', () => {
     expect(lint(long(2).replace('{', `{\n${'// comment\n\n'.repeat(200)}`))).toEqual([]);

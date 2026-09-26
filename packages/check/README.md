@@ -4,9 +4,10 @@ The source-rule checker for calm TypeScript projects: commit message, function l
 file cycles, directory cycles, strict-fp and purity, with a pinned compiler for `typecheck`.
 Node 24+, ESM, MIT.
 
-This package pins `oxlint`, `oxlint-tsgolint`, `oxc-parser`, `oxc-resolver`, `oxfmt` and
-`typescript`, so a project installs one pinned toolchain instead of six, and re-exports the
-formatter and linter presets.
+This package depends on `oxc-parser`, `oxc-resolver` and `typescript`: the parser and resolver back
+the source rules, and `typecheck` runs this pinned compiler instead of whatever the project happens
+to have. It re-exports the bundled formatter and linter presets as plain data, so installing it
+never installs a formatter or a linter.
 
 ## Install
 
@@ -28,12 +29,13 @@ pnpm exec ts-calm typecheck
 | `explain <rule>`               | Explain a rule and its functional alternative                    |
 | `commit-message --file <path>` | Check `scope - verb description`, e.g. `fp - add safe guards`    |
 
-Commands support `--cwd` and `--json`. Exit codes: 0 passed, 1 violations, 2 execution or
-configuration errors.
+Commands support `--cwd` and `--json`. Exit codes: 0 passed, 1 at least one error-severity
+violation, 2 execution or configuration errors. Warnings are reported without failing.
 
 Formatting and linting are project scripts, not commands, because they belong to the project's
-toolchain and a workspace runs them once for every package. The generated template wires both
-through the pinned binaries and the exported presets:
+toolchain and a workspace runs them once for every package. This package therefore ships no
+formatter or linter API either; it only re-exports their presets as data. The generated template
+wires both through the project's own binaries:
 
 ```json
 {
@@ -47,14 +49,14 @@ through the pinned binaries and the exported presets:
 
 ## Presets
 
-| Entry                               | Purpose                       |
-| ----------------------------------- | ----------------------------- |
-| `@ts-calm/check/tsconfig.json`      | Strict compiler defaults      |
-| `@ts-calm/check/tsconfig.node.json` | Node 24 ESM compiler defaults |
-| `@ts-calm/check/oxlint`             | The bundled Oxlint preset     |
-| `@ts-calm/check/oxfmt`              | The bundled Oxfmt preset      |
+| Entry                               | Purpose                            |
+| ----------------------------------- | ---------------------------------- |
+| `@ts-calm/check/tsconfig.json`      | Strict compiler defaults           |
+| `@ts-calm/check/tsconfig.node.json` | Node 24 ESM compiler defaults      |
+| `@ts-calm/check/oxlint`             | The bundled Oxlint preset, as data |
+| `@ts-calm/check/oxfmt`              | The bundled Oxfmt preset, as data  |
 
-A project configuration can simply re-export one:
+A project configuration can simply re-export one, and the project supplies the binary:
 
 ```ts
 // oxlint.config.ts
@@ -66,14 +68,16 @@ export default preset;
 ## API
 
 `@ts-calm/check` exports `defineConfig`, `runChecks`, `analyzeSources`, `checkProject`,
-`checkSourceProject`, `checkStaged`, `checkStagedMessage`, `formatProject`, `lintProject`,
-`typecheckProject`, `validateCommitMessage`, `formatDiagnostics`, `initializeProject`,
-`explainRule`, plus the `CheckConfig`, `Diagnostic` and `RuleName` types and
+`checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject`, `typecheckProject`,
+`validateCommitMessage`, `formatDiagnostics`, `initializeProject`, `explainRule`, plus the
+`CheckConfig`, `Diagnostic`, `RuleName`, `InitResult`, `CheckInput`, `SourceFile`, `StrictCheck`,
+`ResolvedImport`, `ImportResolution` and `ImportFact` types and
 `validateConfiguration`/`loadConfiguration`.
 
-`checkProject`, `checkSourceProject`, `checkStaged`, `checkStagedMessage`, `formatProject` and
+`checkProject`, `checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject` and
 `initializeProject` are asynchronous and return promises. `checkProject` applies only the source
-rules; `formatProject` and `lintProject` are available when a caller wants them in process.
+rules; `typecheckProject` runs the pinned compiler. There is no in-process formatter or linter: run
+those as project scripts, which is what the presets above are for.
 
 ## Rules
 

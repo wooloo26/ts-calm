@@ -6,8 +6,15 @@ import { checkModuleCycles } from '#src/module-cycles';
 import { checkPurity } from '#src/purity';
 import { helpForRule, documentationFor } from '#src/rule-help';
 import { enabled, selected } from '#src/configuration';
-import { diagnostic } from '#src/diagnostics';
-import type { AnalyzedFile, Diagnostic, CheckConfig, CheckInput } from '#src/types';
+import { diagnostic, byPosition } from '#src/diagnostics';
+import type {
+  AnalyzedFile,
+  Diagnostic,
+  CheckConfig,
+  CheckInput,
+  ImportFact,
+  ResolvedImport,
+} from '#src/types';
 
 export const analyzeSources = (
   input: CheckInput,
@@ -47,22 +54,19 @@ const checkFile = (file: AnalyzedFile, config: CheckConfig): readonly Diagnostic
   return diagnostics;
 };
 
-export const runChecks = (input: CheckInput, config: CheckConfig = {}): readonly Diagnostic[] => {
-  const analyzed = analyzeSources(input, config);
-  const diagnostics = analyzed.flatMap((file) => checkFile(file, config));
-  diagnostics.push(...checkPurity(analyzed, input.imports ?? [], config));
-  const checked = new Set(analyzed.map((file) => file.source.path));
+const importKey = (file: string, imported: ImportFact): string =>
+  `${file}\0${imported.offset}\0${imported.specifier}\0${imported.typeOnly}`;
+
+/** Imports the parser saw but the caller never resolved. */
+const missingResolutions = (
+  analyzed: readonly AnalyzedFile[],
+  imports: readonly ResolvedImport[],
+): readonly Diagnostic[] => {
+  const resolved = new Set(imports.map((entry) => importKey(entry.file, entry.imported)));
+  const diagnostics: Diagnostic[] = [];
   for (const file of analyzed)
     for (const imported of file.parsed.imports)
-      if (
-        !(input.imports ?? []).some(
-          (entry) =>
-            entry.file === file.source.path &&
-            entry.imported.offset === imported.offset &&
-            entry.imported.specifier === imported.specifier &&
-            entry.imported.typeOnly === imported.typeOnly,
-        )
-      )
+      if (!resolved.has(importKey(file.source.path, imported)))
         diagnostics.push(
           diagnostic(
             file.source,
@@ -71,14 +75,20 @@ export const runChecks = (input: CheckInput, config: CheckConfig = {}): readonly
             imported.offset,
           ),
         );
-  for (const entry of input.imports ?? []) {
-    const source = input.files.find((file) => file.path === entry.file);
-    if (
-      source &&
-      checked.has(source.path) &&
-      entry.target.kind === 'project' &&
-      !checked.has(entry.target.path)
-    )
+  return diagnostics;
+};
+
+/** Resolutions that point outside the inspected source set or failed outright. */
+const brokenResolutions = (
+  analyzed: readonly AnalyzedFile[],
+  imports: readonly ResolvedImport[],
+): readonly Diagnostic[] => {
+  const inspected = new Map(analyzed.map((file) => [file.source.path, file.source]));
+  const diagnostics: Diagnostic[] = [];
+  for (const entry of imports) {
+    const source = inspected.get(entry.file);
+    if (!source) continue;
+    if (entry.target.kind === 'project' && !inspected.has(entry.target.path))
       diagnostics.push(
         diagnostic(
           source,
@@ -87,31 +97,43 @@ export const runChecks = (input: CheckInput, config: CheckConfig = {}): readonly
           entry.imported.offset,
         ),
       );
-    if (source && checked.has(source.path) && entry.target.kind === 'error')
+    if (entry.target.kind === 'error')
       diagnostics.push(
         diagnostic(source, 'imports/resolve', entry.target.message, entry.imported.offset),
       );
   }
-  if (config.rules?.['no-file-cycles'] !== false) {
-    diagnostics.push(
-      ...checkCycles(
-        analyzed.map((file) => file.source),
-        input.imports ?? [],
-      ),
-    );
-  }
-  if (config.rules?.['no-module-cycles'] !== false)
-    diagnostics.push(
-      ...checkModuleCycles(
-        analyzed.map((file) => file.source),
-        input.imports ?? [],
-      ),
-    );
-  return diagnostics.toSorted(
-    (left, right) =>
-      left.file.localeCompare(right.file) ||
-      left.line - right.line ||
-      left.column - right.column ||
-      left.rule.localeCompare(right.rule),
-  );
+  return diagnostics;
 };
+
+/**
+ * Apply every rule to sources that were already analyzed.
+ *
+ * `checkSourceProject` analyzes once, resolves the import graph from those facts and lands here,
+ * so a full check parses and models each file exactly once.
+ *
+ * @param analyzed - The selected files paired with their parser facts.
+ * @param config - Optional explicit configuration.
+ * @param imports - The resolved import graph for those files.
+ * @returns Every source-rule diagnostic, sorted by file, position and rule.
+ */
+export const runAnalyzedChecks = (
+  analyzed: readonly AnalyzedFile[],
+  config: CheckConfig = {},
+  imports: readonly ResolvedImport[] = [],
+): readonly Diagnostic[] => {
+  const sources = analyzed.map((file) => file.source);
+  const diagnostics: Diagnostic[] = [
+    ...analyzed.flatMap((file) => checkFile(file, config)),
+    ...checkPurity(analyzed, imports, config),
+    ...missingResolutions(analyzed, imports),
+    ...brokenResolutions(analyzed, imports),
+  ];
+  if (config.rules?.['no-file-cycles'] !== false)
+    diagnostics.push(...checkCycles(sources, imports));
+  if (config.rules?.['no-module-cycles'] !== false)
+    diagnostics.push(...checkModuleCycles(sources, imports));
+  return diagnostics.toSorted(byPosition);
+};
+
+export const runChecks = (input: CheckInput, config: CheckConfig = {}): readonly Diagnostic[] =>
+  runAnalyzedChecks(analyzeSources(input, config), config, input.imports ?? []);

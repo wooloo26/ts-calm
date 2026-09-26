@@ -25,7 +25,6 @@
   "files": [
     "dist",
     "presets",
-    "types",
     "README.md"
   ],
   "type": "module",
@@ -55,13 +54,10 @@
     },
     "./tsconfig.json": "./presets/tsconfig.strict.json",
     "./tsconfig.node.json": "./presets/tsconfig.node.json",
-    "./node": {
-      "types": "./types/node.d.ts"
-    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "node --experimental-strip-types scripts/build.ts",
+    "build": "node scripts/build.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
@@ -70,14 +66,13 @@
     "@ts-calm/fp": "workspace:*",
     "oxc-parser": "0.150.0",
     "oxc-resolver": "11.24.2",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
-    "oxlint-tsgolint": "7.0.2002",
     "typescript": "7.0.2"
   },
   "devDependencies": {
     "@types/node": "24.13.6",
-    "undici-types": "7.18.2",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
     "vitest": "5.0.1"
   },
   "engines": {

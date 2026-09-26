@@ -1,3 +1,5 @@
+import { packageManagerVersion, toolchainVersions } from './toolchain.ts';
+
 /** The pinned toolchain and package versions written into a generated workspace. */
 export type WorkspaceTemplateOptions = Readonly<{
   /** The `@ts-calm/fp` version pinned in the generated manifests. */
@@ -15,8 +17,14 @@ export type WorkspaceTemplateOptions = Readonly<{
 /** One generated workspace file, path-keyed relative to the destination directory. */
 export type WorkspaceFile = Readonly<{ path: string; content: string }>;
 
-const json = (value: unknown): string =>
-  JSON.stringify(value, (_key, item: unknown) => item, 2) + '\n';
+/**
+ * An identity replacer.
+ *
+ * `JSON.stringify` only reaches its indent argument if a replacer is supplied, and both `null` and
+ * `undefined` are forbidden literals under `strict-fp`, so this is the spelling that needs none.
+ */
+const keep = (_key: string, item: unknown): unknown => item;
+const json = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n';
 
 const testConfig = `import { defineConfig } from 'vitest/config';
 
@@ -46,11 +54,12 @@ const rootPackage = (options: WorkspaceTemplateOptions): string =>
     name: 'typescript-workspace',
     private: true,
     type: 'module',
-    packageManager: 'pnpm@11.22.0',
+    packageManager: packageManagerVersion,
     engines: { node: '>=24' },
     scripts: {
       build: 'turbo run build',
-      typecheck: 'turbo run typecheck',
+      // The package projects build through references; this also checks every test file.
+      typecheck: 'turbo run typecheck && tsc --noEmit -p tsconfig.json',
       test: 'turbo run test',
       fmt: 'oxfmt --write .',
       'fmt:check': 'oxfmt --check .',
@@ -60,9 +69,9 @@ const rootPackage = (options: WorkspaceTemplateOptions): string =>
     devDependencies: {
       '@ts-calm/check': options.checkVersion,
       '@ts-calm/fp': options.fpVersion,
-      oxfmt: '0.68.0',
-      oxlint: '1.83.0',
-      'oxlint-tsgolint': '7.0.2002',
+      oxfmt: toolchainVersions.oxfmt,
+      oxlint: toolchainVersions.oxlint,
+      'oxlint-tsgolint': toolchainVersions.oxlintTsgolint,
       turbo: options.turbo,
       typescript: options.compiler,
       vitest: options.vitest,
@@ -95,9 +104,9 @@ const packageManifest = (
     devDependencies: {
       '@ts-calm/check': options.checkVersion,
       '@ts-calm/fp': options.fpVersion,
-      oxfmt: '0.68.0',
-      oxlint: '1.83.0',
-      'oxlint-tsgolint': '7.0.2002',
+      oxfmt: toolchainVersions.oxfmt,
+      oxlint: toolchainVersions.oxlint,
+      'oxlint-tsgolint': toolchainVersions.oxlintTsgolint,
       typescript: options.compiler,
       vitest: options.vitest,
     },
@@ -134,9 +143,18 @@ export const workspaceTemplate = (options: WorkspaceTemplateOptions): readonly W
     '.gitignore': 'node_modules/\ndist/\n.turbo/\n.local/\ncoverage/\n*.tsbuildinfo\n',
     'oxlint.config.ts': "import preset from '@ts-calm/check/oxlint';\n\nexport default preset;\n",
     'oxfmt.config.ts': "import preset from '@ts-calm/check/oxfmt';\nexport default preset;\n",
-    'vitest.workspace.ts': `import { defineWorkspace } from 'vitest/config';
+    // A root project so the configuration files and every test file are covered by the compiler.
+    // `customConditions` resolves the sibling workspace package to its sources, not its build.
+    'tsconfig.json': json({
+      extends: '@ts-calm/check/tsconfig.node.json',
+      compilerOptions: { types: [], customConditions: ['source'] },
+      include: ['*.ts', 'packages/*/src/**/*.ts', 'packages/*/tests/**/*.ts'],
+    }),
+    'vitest.config.ts': `import { defineConfig } from 'vitest/config';
 
-export default defineWorkspace(['packages/*/vitest.config.ts']);
+export default defineConfig({
+  test: { projects: ['packages/*/vitest.config.ts'] },
+});
 `,
     'README.md':
       '# TypeScript workspace\n\n`pnpm install` then `pnpm fmt`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm check`, `pnpm test`.\n\nPackages own their builds and tests. Internal imports are relative and keep the `.ts` extension, which works in Node, bundlers and browsers alike.\n',

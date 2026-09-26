@@ -145,7 +145,7 @@ stock/write.ts -> orders/types.ts
 
 ## boundary
 
-Only direct effects or concrete adaptation justify .b.ts. Explain the guarantee with @boundary, declare actual @effects, and prefer functional helpers before adding @allow.
+Only direct effects or concrete adaptation justify .b.ts. Adaptation covers bridging an external shape and bridging a type relationship the compiler cannot express, such as correlated overloads. Explain the guarantee with @boundary, declare actual @effects, and prefer functional helpers before adding @allow.
 
 ```ts
 /**
@@ -156,7 +156,7 @@ Only direct effects or concrete adaptation justify .b.ts. Explain the guarantee 
 
 ## function-length
 
-Split by responsibility above 80 effective lines; above 150 is an error. A necessary local exception must remain used and state its reason.
+Split by responsibility above 80 effective lines; above 150 is an error. Only the lines inside a function body count: comments, blank lines and nested function bodies are excluded, and the declaration braces are not lines. A necessary local exception must remain used and state its reason.
 
 ```ts
 // calm-allow-next-function function-length -- This dispatch mirrors one external format.

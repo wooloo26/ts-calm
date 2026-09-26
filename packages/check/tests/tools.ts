@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  lintProject,
   checkProject,
   checkStaged,
   explainRule,
-  formatProject,
   initializeProject,
   typecheckProject,
 } from '@ts-calm/check';
@@ -51,62 +49,24 @@ describe('complete static checking', () => {
       await withProject(
         {
           ...base,
-          '.oxlintrc.json': baselineLint,
           'src/adapter.b.ts': `/**\n * @boundary Adapt an external untyped callback shape.\n * @allow strict-fp/${allowance} -- External callback type cannot be expressed here.\n */\nexport const adapter=(value:any)=>value;`,
         },
-        async (root) => {
-          await formatProject(root, false);
-          expect(await checkProject(root)).toEqual([]);
-        },
+        async (root) => expect(await checkProject(root)).toEqual([]),
       );
     await withProject(
-      { ...base, '.oxlintrc.json': baselineLint, 'src/a.ts': 'export const f=(value:any)=>value;' },
+      { ...base, 'src/a.ts': 'export const f=(value:any)=>value;' },
       async (root) => {
-        await formatProject(root, false);
         expect((await checkProject(root)).filter((item) => item.rule.includes('any'))).toHaveLength(
           1,
         );
         write(root, 'ts-calm.config.ts', 'export default {rules:{"strict-fp":{"no-any":false}}}');
-        await formatProject(root, false, ['ts-calm.config.ts']);
         expect(await checkProject(root)).toEqual([]);
       },
     );
   });
-  it('keeps Promise lint independent of a broad strict-fp exception', async () => {
-    await withProject(
-      {
-        ...base,
-        '.oxlintrc.json': baselineLint,
-        'src/a.b.ts':
-          '/**\n * @boundary Adapt external callbacks.\n * @allow strict-fp/* -- A nullable callback result must be normalized.\n */\nexport function f(){Promise.resolve(1);return null;}',
-      },
-      async (root) =>
-        expect(lintProject(root).some((item) => item.rule.includes('no-floating-promises'))).toBe(
-          true,
-        ),
-    );
-  });
-  it('does not skip a missing compiler configuration or invalid tool configuration', async () => {
+  it('does not skip a missing compiler configuration', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) =>
       expect(() => typecheckProject(root)).toThrow('ts-calm init'),
-    );
-    await withProject({ ...base, '.oxlintrc.json': '{' }, async (root) =>
-      expect(() => lintProject(root)).toThrow(),
-    );
-  });
-  it('uses the local formatter configuration and keeps checking read-only', async () => {
-    await withProject(
-      {
-        ...base,
-        '.oxfmtrc.json': '{"singleQuote":false}',
-        'src/a.ts': 'export const a = "value";\n',
-      },
-      async (root) => {
-        await formatProject(root, false);
-        const before = readFileSync(join(root, 'src/a.ts'));
-        expect(await formatProject(root)).toEqual([]);
-        expect(readFileSync(join(root, 'src/a.ts'))).toEqual(before);
-      },
     );
   });
 });
@@ -131,6 +91,21 @@ describe('initialization and guidance', () => {
         expect(paths.map((path) => readFileSync(join(root, path)))).toEqual(before);
       },
     );
+  });
+  it('writes the configuration it creates without calling a formatter', async () => {
+    await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) => {
+      const result = await initializeProject(root);
+      expect(result.created).toEqual(['tsconfig.json']);
+      expect(result.updated).toEqual([]);
+      const written = readFileSync(join(root, 'tsconfig.json'), 'utf8');
+      expect(JSON.parse(written).extends).toBe('@ts-calm/check/tsconfig.node.json');
+      expect(written.endsWith('\n')).toBe(true);
+      expect(await initializeProject(root)).toEqual({
+        created: [],
+        updated: [],
+        warnings: [],
+      });
+    });
   });
   it('explains existing helpers before suggesting raw syntax exceptions', () => {
     expect(explainRule('strict-fp/no-try')).toContain('captureResult');

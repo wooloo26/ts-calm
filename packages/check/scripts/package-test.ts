@@ -14,6 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { builtinModules } from 'node:module';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { hasOwn, isArray, isString } from '@ts-calm/fp';
@@ -130,13 +131,33 @@ const files = manifest.files.map((file) =>
 );
 const allowed = ['package.json', 'LICENSE', 'README.md'];
 const unexpected = files.filter(
-  (path) => !/^(dist|presets|types)\//.test(path) && !allowed.includes(path),
+  (path) => !/^(dist|presets)\//.test(path) && !allowed.includes(path),
 );
 if (unexpected.length) throw new Error(`Unexpected packed content: ${unexpected.join(', ')}`);
+/** Specifiers a published file may import: its dependencies, Node builtins and itself. */
+const checkManifest = manifestOf('check');
+const published = new Set([
+  ...Object.keys(
+    typeof checkManifest['dependencies'] === 'object' && checkManifest['dependencies']
+      ? checkManifest['dependencies']
+      : {},
+  ),
+  ...builtinModules,
+  '@ts-calm/check',
+]);
+/** The package a bare specifier belongs to, so a dependency subpath still counts as published. */
+const packageNameOf = (name: string): string => {
+  const parts = name.split('/');
+  return name.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? name);
+};
+const unpublished = (name: string): boolean =>
+  !name.startsWith('.') &&
+  !name.startsWith('#') &&
+  !name.startsWith('node:') &&
+  !published.has(packageNameOf(name));
 for (const path of files) {
   if (!path.endsWith('.js') && !path.endsWith('.ts')) continue;
   const content = readFileSync(join(checkPackage, path), 'utf8');
-  if (content.includes('@local-tx-one-piece')) throw new Error(`Unpublished dependency in ${path}`);
   const module = parseSync(path, content).module;
   const imports = [
     ...module.staticImports.map((entry) => entry.moduleRequest.value),
@@ -146,6 +167,8 @@ for (const path of files) {
   ];
   if (imports.some((name) => /^#(?:tests|fixtures|scripts)\//.test(name)))
     throw new Error(`Development-only import in ${path}`);
+  const leaks = imports.filter(unpublished);
+  if (leaks.length) throw new Error(`Unpublished dependency ${leaks.join(', ')} in ${path}`);
 }
 
 const checkTarball = tarballs.get('@ts-calm/check');
@@ -163,8 +186,8 @@ writeFileSync(
         'published exports',
         'type declarations',
         'init idempotence',
-        'bundled Node types',
-        'all static tools',
+        'pinned compiler',
+        'no published formatter or linter import',
         'CLI',
         'independent functional entry',
       ],

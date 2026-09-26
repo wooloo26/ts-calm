@@ -9,10 +9,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { initializeWorkspace } from '@ts-calm/create-template';
 import { checkProject } from '#src/project';
-import { typecheckProject } from '#src/tools.b';
-import { initializeProject } from '#src/init.b';
 import { explainRule, helpForRule } from '#src/rule-help';
 import { checkStaged, checkStagedMessage } from '#src/staged.b';
 import { formatDiagnostics } from '#src/diagnostics';
@@ -63,7 +60,10 @@ const main = async (): Promise<void> => {
   }
   if (command === 'init') {
     if (template && template !== 'pnpm-turbo') throw new Error(`Unknown template ${template}.`);
-    const result = template ? await initializeWorkspace(root) : await initializeProject(root);
+    // Loaded on demand: checking, explaining and commit-message never need a formatter or generator.
+    const result = template
+      ? await (await import('@ts-calm/create-template')).initializeWorkspace(root)
+      : await (await import('#src/init.b')).initializeProject(root);
     console.log(
       json
         ? JSON.stringify(result)
@@ -84,7 +84,8 @@ const main = async (): Promise<void> => {
   let diagnostics: readonly Diagnostic[];
   if (command === 'check')
     diagnostics = staged ? await checkStaged(root) : await checkProject(root);
-  else if (command === 'typecheck') diagnostics = typecheckProject(root);
+  else if (command === 'typecheck')
+    diagnostics = (await import('#src/typecheck.b')).typecheckProject(root);
   else if (command === 'commit-message' && file)
     diagnostics = await checkStagedMessage(root, readFileSync(resolve(root, file), 'utf8'));
   else throw new Error(usage);

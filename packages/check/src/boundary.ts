@@ -23,6 +23,9 @@ const declarations = ({ source, parsed }: AnalyzedFile): readonly Declaration[] 
         if (previous) output.push({ ...previous, value: `${previous.value} ${clean}` });
       }
     }
+    // The declaration is one leading block. Without this stop, the JSDoc of the first documented
+    // member, which only whitespace separates from the header, is read as boundary tags too.
+    if (output.some((entry) => entry.tag === 'boundary')) break;
   }
   return output;
 };
@@ -99,5 +102,8 @@ export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
       'purpose',
       'No direct effect or concrete adaptation justifies .b.ts; use an ordinary source file.',
     );
-  return { diagnostics, allowances: diagnostics.length === 0 ? allowances : new Set() };
+  // Allowances are validated independently of the other boundary diagnostics. Dropping them when the
+  // file is otherwise incomplete would silently re-enable every `strict-fp` check the file declared,
+  // so one missing `@effects` line would report an unrelated page of `strict-fp` errors.
+  return { diagnostics, allowances };
 };

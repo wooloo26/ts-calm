@@ -4,7 +4,7 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyzeSources, runChecks } from '#src/engine';
+import { analyzeSources, runAnalyzedChecks } from '#src/engine';
 import { excluded, selected } from '#src/configuration';
 import { loadConfiguration } from '#src/config-reader.b';
 import { resolveImports } from '#src/resolver.b';
@@ -43,6 +43,8 @@ export const checkSourceProject = async (
   const files: SourceFile[] = paths
     .filter((path) => selected(path, config))
     .map((path) => ({ path, content: readFileSync(join(root, path), 'utf8') }));
-  const imports = resolveImports(root, analyzeSources({ files }, config), paths);
-  return runChecks({ files, imports }, config);
+  // One analysis feeds both the import graph and the rules, so every file is parsed once.
+  const analyzed = analyzeSources({ files }, config);
+  const imports = resolveImports(root, analyzed, paths);
+  return runAnalyzedChecks(analyzed, config, imports);
 };

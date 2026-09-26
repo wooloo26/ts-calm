@@ -26,6 +26,11 @@ export type JsonIssue = Readonly<{
 }>;
 
 type PendingValue = Readonly<{ value: unknown; leaving: boolean }>;
+/** Normalize a thrown value into a JSON issue without inspecting an uninspectable message. */
+const fault = (code: JsonIssue['code'], fallback: string, cause: unknown): JsonIssue => ({
+  code,
+  message: cause instanceof Error ? cause.message : fallback,
+});
 const checkJsonValue = (input: unknown): Result<Unit, JsonIssue> => {
   const pending: PendingValue[] = [{ value: input, leaving: false }];
   const ancestors = new Set<object>();
@@ -90,19 +95,20 @@ const serializeDto = (value: JsonValue): Result<string, JsonIssue> => {
       ? ok(encoded)
       : err({ code: 'serialization-failed', message: 'DTO has no JSON representation' });
   } catch (cause) {
-    return err({
-      code: 'serialization-failed',
-      message: cause instanceof Error ? cause.message : 'JSON serialization failed',
-    });
+    return err(fault('serialization-failed', 'JSON serialization failed', cause));
   }
 };
 
 /**
  * Encode a value through its codec and serialize it as JSON text.
  *
+ * Data problems are returned; a fault thrown by the codec itself is a defect in caller code and
+ * propagates instead of being reported as an issue a caller could handle as data.
+ *
  * @param value - The domain value to write.
  * @param codec - Supplies the DTO shape; the DTO is validated before serialization.
  * @returns `Ok` with compact JSON text, or `Err` with the JSON issue.
+ * @throws If the codec's `encode` throws.
  */
 export const encodeJson = <Value, Problem>(
   value: Value,
@@ -125,9 +131,13 @@ const parseJson = (text: string): Result<unknown, JsonIssue> => {
 /**
  * Parse JSON text, check that it only contains JSON values, then decode it.
  *
+ * A fault thrown by the codec itself is a defect in caller code and propagates, exactly as in
+ * {@link encodeJson}.
+ *
  * @param text - The JSON text to parse; invalid text is a returned failure, not a throw.
  * @param codec - Decodes the parsed value into the domain type.
  * @returns `Ok` with the decoded value, or `Err` with a JSON issue or the codec's problem.
+ * @throws If the codec's `decode` throws.
  */
 export const decodeJson = <Value, Problem>(
   text: string,
@@ -172,9 +182,6 @@ export const formatDiagnostic = (value: unknown, space?: number): Result<string,
       ? err({ code: 'serialization-failed', message: 'The value has no JSON representation' })
       : ok(encoded);
   } catch (cause) {
-    return err({
-      code: 'serialization-failed',
-      message: cause instanceof Error ? cause.message : 'JSON serialization failed',
-    });
+    return err(fault('serialization-failed', 'JSON serialization failed', cause));
   }
 };

@@ -6,7 +6,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isPlainObject } from '@ts-calm/fp';
-import { formatProject } from '#src/tools.b';
 
 /**
  * The configuration files created or updated by one `init` invocation.
@@ -22,17 +21,23 @@ export type InitResult = Readonly<{
   /** Non-fatal notes about preserved decisions. */
   warnings: readonly string[];
 }>;
-const pretty = (value: unknown): string =>
-  JSON.stringify(value, (_key, item: unknown) => item, 2) + '\n';
+/**
+ * An identity replacer.
+ *
+ * `JSON.stringify` only reaches its indent argument if a replacer is supplied, and both `null` and
+ * `undefined` are forbidden literals here, so this is the one spelling that needs no allowance.
+ */
+const keep = (_key: string, item: unknown): unknown => item;
+const pretty = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n';
 
 /**
  * Create the missing Node ESM project configuration.
  *
  * @impure Reads and writes project configuration files.
  * Existing files and existing manifest choices are preserved; only a missing `tsconfig.json`
- * and a missing ESM `type` are added, and every created file is formatted with the bundled
- * preset. Formatter, linter and bundler presets are re-exported from `@ts-calm/check` by the
- * generated workspace instead of copied into a project.
+ * and a missing ESM `type` are added, written exactly as JSON so no formatter is involved.
+ * Compiler, formatter and linter presets are re-exported from `@ts-calm/check` by the generated
+ * workspace instead of copied into a project.
  *
  * @param root - Absolute project root.
  * @returns The created and updated paths plus any warnings.
@@ -52,12 +57,6 @@ export const initializeProject = async (root: string): Promise<InitResult> => {
       'tsconfig.json',
       pretty({
         extends: '@ts-calm/check/tsconfig.node.json',
-        compilerOptions: {
-          types: [
-            './node_modules/@ts-calm/check/types/node/index.d.ts',
-            './node_modules/@ts-calm/check/types/undici-types/index.d.ts',
-          ],
-        },
         include: ['**/*.ts', '**/*.tsx'],
         exclude: ['node_modules', 'dist', 'build', '.local', 'coverage'],
       }),
@@ -78,7 +77,5 @@ export const initializeProject = async (root: string): Promise<InitResult> => {
     writeFileSync(join(root, path), content, { flag: 'wx' });
     created.push(path);
   }
-  const files = [...created, ...updated];
-  if (files.length > 0) await formatProject(root, false, files);
   return { created, updated, warnings };
 };

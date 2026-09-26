@@ -15,7 +15,7 @@ export type OptionData<Value> =
 /**
  * Convert a result into its publishable DTO.
  *
- * @param value - The result to convert; the payload is copied, not decoded.
+ * @param value - A result produced by this library; another container has no `Result` DTO.
  * @returns The explicit DTO a serializer can write.
  */
 export const toResultData = <Value, Problem>(
@@ -36,7 +36,7 @@ export const fromResultData = <Value, Problem>(
 /**
  * Convert an option into its publishable DTO.
  *
- * @param value - The option to convert.
+ * @param value - An option produced by this library; another container has no `Option` DTO.
  * @returns `{present: true, value}` or `{present: false}`.
  */
 export const toOptionData = <Value>(value: Option<Value>): OptionData<Value> =>

@@ -1,8 +1,6 @@
 {
-  "extends": "../../packages/check/presets/tsconfig.node.json",
+  "extends": "../check/presets/tsconfig.node.json",
   "compilerOptions": {
-    "types": ["node"],
-    "typeRoots": ["./node_modules/@types"],
     "customConditions": ["source"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "benchmarks/**/*.ts"]

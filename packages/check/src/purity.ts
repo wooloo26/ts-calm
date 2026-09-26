@@ -4,7 +4,7 @@ import { diagnostic } from '#src/diagnostics';
 import { enabled } from '#src/configuration';
 import type { AnalyzedFile, CheckConfig, Diagnostic, ResolvedImport } from '#src/types';
 import type { Project, Evaluation } from '#src/purity-values';
-import type { PurityModel } from '#src/purity-model';
+import type { FunctionModel, PurityModel } from '#src/purity-model';
 
 const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonly Diagnostic[] =>
   models.flatMap((model) => {
@@ -22,48 +22,87 @@ const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonl
       );
   });
 
+/** How many propagation rounds a project may take before its effect declarations settle. */
+const maximumRounds = 3;
+const sameMembers = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean =>
+  left.size === right.size && [...left].every((item) => right.has(item));
+
+/** Build the shared project view and the binding-to-model index the evaluator relies on. */
+const projectOf = (
+  files: readonly AnalyzedFile[],
+  imports: readonly ResolvedImport[],
+  config: CheckConfig,
+): Project => {
+  const models = new Map(files.map((file) => [file.source.path, buildPurityModel(file)]));
+  const owned = [...models.values()];
+  return {
+    models,
+    owners: new Map(
+      owned.flatMap((model) => [...model.bindings.keys()].map((id) => [id, model] as const)),
+    ),
+    functions: new Map(owned.flatMap((model) => [...model.functions])),
+    bindings: new Map(owned.flatMap((model) => [...model.bindings])),
+    targets: new Map(
+      imports.flatMap((entry) =>
+        entry.target.kind === 'project'
+          ? [[`${entry.file}\0${entry.imported.specifier}`, entry.target.path] as const]
+          : [],
+      ),
+    ),
+    custom: config.effectImports ?? [],
+    declared: new Set<string>(),
+  };
+};
+
+/**
+ * Evaluate every candidate until the set of changing bindings and declared effects stops growing.
+ *
+ * The propagation order no longer changes the answer, and a settled project costs one evaluation
+ * per candidate per round instead of one per inspection stage.
+ */
+const settle = (
+  project: Project,
+  candidates: readonly FunctionModel[],
+): ReadonlyMap<string, Evaluation> => {
+  let changed = new Set<string>(),
+    declared = new Set<string>(),
+    results = new Map<string, Evaluation>();
+  for (let round = 0; round < maximumRounds; round += 1) {
+    const scope = declared.size > 0 ? { ...project, declared } : project;
+    const nextChanged = new Set<string>();
+    results = new Map();
+    for (const fn of candidates) {
+      const evaluation = evaluatePurity(scope, fn, changed);
+      results.set(fn.id, evaluation);
+      for (const binding of evaluation.writes) nextChanged.add(binding);
+    }
+    const nextDeclared = new Set(
+      candidates
+        .filter((fn) => fn.annotated && fn.reason && results.get(fn.id)?.effects.size === 0)
+        .map((fn) => fn.id),
+    );
+    const stable = sameMembers(nextChanged, changed) && sameMembers(nextDeclared, declared);
+    changed = nextChanged;
+    declared = nextDeclared;
+    if (stable) break;
+  }
+  return results;
+};
+
 export const checkPurity = (
   files: readonly AnalyzedFile[],
   imports: readonly ResolvedImport[],
   config: CheckConfig,
 ): readonly Diagnostic[] => {
   if (!files.some((file) => enabled('purity', file.source.path, config))) return [];
-  const models = new Map(files.map((file) => [file.source.path, buildPurityModel(file)]));
-  const functions = new Map([...models.values()].flatMap((model) => [...model.functions]));
-  const bindings = new Map([...models.values()].flatMap((model) => [...model.bindings]));
-  const targets = new Map(
-    imports.flatMap((entry) =>
-      entry.target.kind === 'project'
-        ? [[`${entry.file}\0${entry.imported.specifier}`, entry.target.path] as const]
-        : [],
-    ),
+  const project = projectOf(files, imports, config);
+  const candidates = [...project.functions.values()].filter((fn) =>
+    enabled('purity', fn.file, config),
   );
-  const project: Project = {
-    models,
-    functions,
-    bindings,
-    targets,
-    custom: config.effectImports ?? [],
-    declared: new Set<string>(),
-  };
-  const candidates = [...functions.values()].filter((fn) => enabled('purity', fn.file, config));
-  const changed = new Set<string>(),
-    results = new Map<string, Evaluation>();
-  for (const fn of candidates)
-    for (const binding of evaluatePurity(project, fn, changed).writes) changed.add(binding);
-  const declared = new Set(
-    candidates
-      .filter(
-        (fn) =>
-          fn.annotated && fn.reason && evaluatePurity(project, fn, changed).effects.size === 0,
-      )
-      .map((fn) => fn.id),
-  );
-  for (const fn of candidates)
-    results.set(fn.id, evaluatePurity({ ...project, declared }, fn, changed));
+  const results = settle(project, candidates);
   const diagnostics: Diagnostic[] = [];
   for (const fn of candidates) {
-    const model = models.get(fn.file),
+    const model = project.models.get(fn.file),
       result = results.get(fn.id);
     if (!model || !result) continue;
     if (fn.annotated && !fn.reason)
@@ -84,7 +123,7 @@ export const checkPurity = (
           fn.anchor,
         ),
       );
-    const owner = functions.get(fn.parent);
+    const owner = project.functions.get(fn.parent);
     const covered = !fn.name && fn.inline && owner && results.get(owner.id)?.executed.has(fn.id);
     if (result.effects.size === 0 || fn.annotated || covered) continue;
     const evidence = [...result.effects.values()];
@@ -102,5 +141,5 @@ export const checkPurity = (
       docs: 'https://github.com/wooloo26/ts-calm/blob/main/docs/rules.md#purity',
     });
   }
-  return [...diagnostics, ...misplaced([...models.values()], config)];
+  return [...diagnostics, ...misplaced([...project.models.values()], config)];
 };

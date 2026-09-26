@@ -33,13 +33,22 @@ export type Evaluation = {
   writes: Set<string>;
   executed: Set<string>;
   fresh: Map<string, Value>;
-  calls: Map<string, readonly Value[]>;
-  activeCalls: Set<string>;
+  /**
+   * Results of analyzed call sites, keyed by invocation and then by node range.
+   *
+   * A frame is created once per invocation and its environment never changes, so the frame
+   * identifies the environment without serializing it on every call.
+   */
+  calls: Map<Frame, Map<string, readonly Value[]>>;
+  /** Call sites that are still being evaluated, keyed like {@link Evaluation.calls}. */
+  activeCalls: Map<Frame, Set<string>>;
 };
 export type Project = Readonly<{
   models: ReadonlyMap<string, PurityModel>;
   functions: ReadonlyMap<string, FunctionModel>;
   bindings: ReadonlyMap<string, Binding>;
+  /** The model that declares each binding, so a reference never scans every model. */
+  owners: ReadonlyMap<string, PurityModel>;
   targets: ReadonlyMap<string, string>;
   custom: readonly string[];
   declared: ReadonlySet<string>;
@@ -53,9 +62,12 @@ export const valueKey = (value: Value): string =>
       : value.kind === 'external'
         ? value.name
         : '?';
-export const unique = (values: readonly Value[]): readonly Value[] => [
-  ...new Map(values.map((value) => [valueKey(value), value])).values(),
-];
+export const unique = (values: readonly Value[]): readonly Value[] => {
+  if (values.length < 2) return values;
+  const seen = new Map<string, Value>();
+  for (const value of values) seen.set(valueKey(value), value);
+  return [...seen.values()];
+};
 
 const expand = (
   node: Node,
@@ -75,9 +87,7 @@ const expand = (
   if (name && !seen.has(key)) {
     if (model.typeDefs.has(name))
       return expand(model.typeDefs.get(name) ?? {}, model, project, new Set([...seen, key]));
-    const imported = [...model.bindings.values()].find(
-      (binding) => binding.name === name && binding.specifier,
-    );
+    const imported = model.importsByName.get(name);
     const target = imported
       ? project.targets.get(`${model.file.source.path}\0${imported.specifier}`)
       : '';
@@ -116,9 +126,7 @@ export const property = (value: Value, key: string, project: Project): readonly 
     ];
   if (value.kind === 'reference') {
     const binding = project.bindings.get(value.id);
-    const ownerModel = binding
-      ? [...project.models.values()].find((candidate) => candidate.bindings.has(binding.id))
-      : false;
+    const ownerModel = project.owners.get(value.id);
     const path = [...value.path, key].slice(0, 8);
     return [
       {

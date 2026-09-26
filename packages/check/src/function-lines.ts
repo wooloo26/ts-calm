@@ -1,8 +1,9 @@
 import type { FunctionFact, SourceComment } from '#src/types';
 
+/** Effective body lines at which a function is reported as a warning. */
 export const functionWarningLines = 80;
+/** Effective body lines above which a function is an error. */
 export const functionMaximumLines = 150;
-export const functionLengthRule = 'function-length';
 const allowanceMarker = 'calm-allow-next-function';
 
 export type FunctionAllowance = Readonly<{
@@ -26,43 +27,40 @@ export const maskedSource = (source: string, comments: readonly SourceComment[])
   return pieces.join('');
 };
 
-export const lineAt = (text: string, offset: number): number => {
-  let line = 1;
-  for (let index = 0; index < Math.min(offset, text.length); index += 1)
-    if (text.charCodeAt(index) === 10) line += 1;
-  return line;
-};
-
 const countContentLines = (text: string): number => {
   let count = 0;
   for (const line of text.split('\n')) if (line.trim() !== '') count += 1;
   return count;
 };
 
+/** The body range that belongs to the function itself, excluding its own braces. */
+const bodyRange = (fact: FunctionFact): Readonly<{ start: number; end: number }> =>
+  fact.bodyBlock
+    ? { start: fact.bodyStart + 1, end: fact.bodyEnd - 1 }
+    : { start: fact.bodyStart, end: fact.bodyEnd };
+
 export const effectiveLineCount = (
   masked: string,
   fact: FunctionFact,
   functions: readonly FunctionFact[],
 ): number => {
+  const range = bodyRange(fact);
   const nested = functions
     .filter(
       (other) =>
-        other.start !== fact.start &&
-        other.bodyStart >= fact.bodyStart &&
-        other.bodyEnd <= fact.bodyEnd,
+        other.start !== fact.start && other.bodyStart >= range.start && other.bodyEnd <= range.end,
     )
     .toSorted((left, right) => left.bodyStart - right.bodyStart);
-  if (nested.length === 0) return countContentLines(masked.slice(fact.bodyStart, fact.bodyEnd));
-  const segments: string[] = [];
-  let cursor = fact.bodyStart;
+  const pieces: string[] = [];
+  let cursor = range.start;
   for (const other of nested) {
     if (other.bodyStart < cursor) continue;
-    segments.push(masked.slice(cursor, other.bodyStart));
-    segments.push(masked.slice(other.bodyStart, other.bodyEnd).replace(/[^\n]/g, ' '));
+    pieces.push(masked.slice(cursor, other.bodyStart));
+    pieces.push(masked.slice(other.bodyStart, other.bodyEnd).replace(/[^\n]/g, ' '));
     cursor = other.bodyEnd;
   }
-  segments.push(masked.slice(cursor, fact.bodyEnd));
-  return countContentLines(segments.join(''));
+  pieces.push(masked.slice(cursor, range.end));
+  return countContentLines(pieces.join(''));
 };
 
 export const mentionsAllowance = (comment: SourceComment): boolean =>

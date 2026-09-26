@@ -1,7 +1,6 @@
 {
   "extends": "../check/presets/tsconfig.node.json",
   "compilerOptions": {
-    "types": ["node"],
     "customConditions": ["source"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"]

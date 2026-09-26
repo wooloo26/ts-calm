@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatProject } from '#src/tools.b';
 
 /**
  * Host configuration that must not leak into an isolated consumer install.
@@ -103,7 +102,9 @@ assert.equal(isBoolean(false),true);
 assert.equal(isNumber(1),true);
 assert.equal(isNumber(Number.NaN),false);
 assert.equal(isNull(null),true);
+assert.equal(isNull(undefined),false);
 assert.equal(isUndefined(undefined),true);
+assert.equal(isUndefined(null),false);
 const values=await traverseAsync([1,2],n=>ok(n*2));
 assert.deepEqual(isOk(values)&&get(values),[2,4]);
 assert.deepEqual(validateCommitMessage('fp - add consume installed package'),[]);
@@ -142,6 +143,8 @@ export const checkConsumer = async (
         name: 'consumer',
         private: true,
         dependencies: { '@ts-calm/fp': spec(fpTarball), '@ts-calm/check': spec(checkTarball) },
+        // The tool ships no Node type definitions, so a checked project installs its own.
+        devDependencies: { '@types/node': '24.13.6' },
       }),
     );
     if (manager === 'npm')
@@ -167,8 +170,6 @@ export const checkConsumer = async (
     writeFileSync(join(consumer, 'src/main.b.ts'), source);
     writeFileSync(join(consumer, 'tests/types.ts'), types);
     writeFileSync(join(consumer, 'runtime.mjs'), runtime);
-    // Formatting is a project concern, so the fixture is formatted before the check runs.
-    await formatProject(consumer, false, ['src/main.b.ts', 'tests/types.ts', 'runtime.mjs']);
     run(consumer, process.execPath, [cli, 'check']);
     run(consumer, process.execPath, [cli, 'typecheck']);
     run(consumer, process.execPath, ['runtime.mjs']);
@@ -187,7 +188,9 @@ export const checkConsumer = async (
       'const {checkProject} = await import("@ts-calm/check"); console.log((await checkProject(process.cwd())).length)',
     ]);
     if (checkApi.trim() !== '0') throw new Error('Installed check API is unusable.');
-    console.log(`${manager}: isolated install, init, Node types, check, CLI and runtime passed.`);
+    console.log(
+      `${manager}: isolated install, init, pinned compiler, check, CLI and runtime passed.`,
+    );
   } finally {
     rmSync(consumer, { recursive: true, force: true });
   }

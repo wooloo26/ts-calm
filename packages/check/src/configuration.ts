@@ -2,7 +2,7 @@ import type { CheckConfig, RuleName } from '#src/types';
 
 export const defineConfig = (config: CheckConfig): CheckConfig => config;
 
-/** Small path glob matcher: *, **, and ?; always use forward slashes. */
+/** Small path glob matcher: `*`, `**` and `?` only; always use forward slashes. */
 export const matches = (path: string, pattern: string): boolean => {
   let expression = '^';
   for (let index = 0; index < pattern.length; index += 1) {
@@ -39,8 +39,10 @@ const supportFile = (path: string): boolean =>
 export const enabled = (rule: RuleName, path: string, config: CheckConfig): boolean => {
   let active = config.rules?.[rule] !== false;
   if (['boundary', 'strict-fp', 'purity'].includes(rule) && supportFile(path)) active = false;
-  for (const override of config.overrides ?? [])
-    if (override.files.some((pattern) => matches(path, pattern)) && rule in override.rules)
-      active = Object.entries(override.rules).find(([name]) => name === rule)?.[1] !== false;
+  for (const override of config.overrides ?? []) {
+    if (!override.files.some((pattern) => matches(path, pattern))) continue;
+    const value = Object.entries(override.rules).find(([name]) => name === rule)?.[1];
+    if (typeof value === 'boolean') active = value;
+  }
   return active;
 };

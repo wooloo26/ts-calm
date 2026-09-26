@@ -1,5 +1,5 @@
 import { record, text, offset, children, functionNode, effectName } from '#src/parser.b';
-import { property, unique, unknown, valueKey, fnForExport } from '#src/purity-values';
+import { property, unique, unknown, fnForExport } from '#src/purity-values';
 import type { Node } from '#src/parser.b';
 import type { FunctionModel, PurityModel, Binding } from '#src/purity-model';
 import { typeKind } from '#src/purity-model';
@@ -347,11 +347,12 @@ const call = (
   node: Node,
   seen: ReadonlySet<string>,
 ): readonly Value[] => {
-  const cache = `${frame.chain.join('>')}:${offset(node)}:${offset(node, 'end')}:${[...frame.env.values()].flat().map(valueKey).join('|')}`;
-  const cached = context.evaluation.calls.get(cache);
+  const cache = `${offset(node)}:${offset(node, 'end')}`;
+  const perFrame = cachedCalls(context, frame);
+  const cached = perFrame.site.get(cache);
   if (cached) return cached;
-  if (context.evaluation.activeCalls.has(cache)) return [unknown];
-  context.evaluation.activeCalls.add(cache);
+  if (perFrame.active.has(cache)) return [unknown];
+  perFrame.active.add(cache);
   const callee = record(node['callee']),
     args = nodes(node['arguments']).map((arg) => resolveValue(context, frame, arg, seen));
   const targets = resolveValue(context, frame, callee, seen);
@@ -417,9 +418,26 @@ const call = (
         for (const arg of args) invoke(context, frame, arg, [[unknown]], node);
     }
   }
-  context.evaluation.activeCalls.delete(cache);
-  context.evaluation.calls.set(cache, result);
+  perFrame.active.delete(cache);
+  perFrame.site.set(cache, result);
   return result;
+};
+
+/** @impure Read or create the per-invocation call cache of the supplied analysis context. */
+const cachedCalls = (
+  context: Context,
+  frame: Frame,
+): Readonly<{ site: Map<string, readonly Value[]>; active: Set<string> }> => {
+  const site = context.evaluation.calls.get(frame);
+  const active = context.evaluation.activeCalls.get(frame);
+  if (site && active) return { site, active };
+  const created = {
+    site: site ?? new Map<string, readonly Value[]>(),
+    active: active ?? new Set<string>(),
+  };
+  context.evaluation.calls.set(frame, created.site);
+  context.evaluation.activeCalls.set(frame, created.active);
+  return created;
 };
 
 /** @impure Traverse one body and collect observed effects in its private analysis result. */
@@ -533,7 +551,7 @@ export const evaluatePurity = (
     executed: new Set(),
     fresh: new Map(),
     calls: new Map(),
-    activeCalls: new Set(),
+    activeCalls: new Map(),
   };
   evaluateFunction({ project, evaluation, root: fn.id, changed }, fn.id);
   return evaluation;

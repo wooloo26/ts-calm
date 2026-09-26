@@ -32,8 +32,7 @@ export const isNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 /** The `null` absence sentinel only. Prefer `fromNullable` when handling external absence. */
-export const isNull = (value: unknown): value is null =>
-  safely('isNull', () => !isNonNullable(value) && !isObject(value) && !isString(value));
+export const isNull = (value: unknown): value is null => safely('isNull', () => value === null);
 /** The `undefined` absence sentinel only. An absent property and a stored `undefined` both match. */
 export const isUndefined = (value: unknown): value is undefined =>
   safely('isUndefined', () => typeof value === 'undefined');

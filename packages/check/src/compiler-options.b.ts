@@ -9,8 +9,14 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { isArray, isPlainObject } from '@ts-calm/fp';
+
+/** Whether a directory is the limit itself or one of its descendants, compared by path segment. */
+const isInside = (directory: string, limit: string): boolean => {
+  const path = relative(limit, directory);
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+};
 
 /** @impure Read filesystem configuration and cache the compiler's normalized conditions for this run. */
 export const compilerConditions = (
@@ -21,7 +27,7 @@ export const compilerConditions = (
   let directory = dirname(resolve(root, file)),
     config = '';
   const limit = resolve(root);
-  while (directory.startsWith(limit)) {
+  while (isInside(directory, limit)) {
     const candidate = join(directory, 'tsconfig.json');
     if (existsSync(candidate)) {
       config = candidate;

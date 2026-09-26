@@ -59,9 +59,14 @@ export type SourceFile = Readonly<{ path: string; content: string }>;
  * apply last, so the final rule state for a file is the override's value when the file matches.
  */
 export type CheckConfig = Readonly<{
-  /** Include globs; defaults to every TypeScript extension when omitted. */
+  /**
+   * Include globs; defaults to every TypeScript extension when omitted.
+   *
+   * Patterns support `*`, `**` and `?` only, against project-relative forward-slash paths.
+   * Brace expansion, character classes and `!` negation are not supported.
+   */
   files?: readonly string[];
-  /** Additional exclude globs, applied after the built-in directory exclusions. */
+  /** Additional exclude globs with the same subset, applied after the built-in directory exclusions. */
   ignores?: readonly string[];
   /** Import specifiers treated as effects by the purity rule, such as `oxc-resolver`. */
   effectImports?: readonly string[];
@@ -95,6 +100,8 @@ export type FunctionFact = Readonly<{
   start: number;
   bodyStart: number;
   bodyEnd: number;
+  /** Whether the body is a brace-delimited block, so the braces are not counted as lines. */
+  bodyBlock: boolean;
 }>;
 /** One import or re-export, including type-only forms. */
 export type ImportFact = Readonly<{ specifier: string; offset: number; typeOnly: boolean }>;

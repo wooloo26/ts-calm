@@ -37,10 +37,12 @@ export const branded = <const Name extends string, Input, Value, Problem>(
  * Prove that an array has at least one element.
  *
  * @param values - The array to inspect; the view is returned, not copied.
- * @returns `Some` with the same array viewed as non-empty, or `None` for an empty array.
+ * @returns `Some` with the same array viewed as non-empty, or `None` for an empty or sparse array.
  */
 export const nonEmpty = <Value>(values: readonly Value[]): Option<NonEmptyReadonlyArray<Value>> =>
-  values.length > 0 ? some(values as NonEmptyReadonlyArray<Value>) : none();
+  values.length > 0 && Object.hasOwn(values, 0)
+    ? some(values as NonEmptyReadonlyArray<Value>)
+    : none();
 
 /**
  * Read one array position without reading beyond its bounds.
@@ -99,9 +101,16 @@ export function lookup<Key, Value>(
   return Object.hasOwn(record, property) ? some(record[property] as Value) : none();
 }
 
+/**
+ * Detect a map by the whole shape a `ReadonlyMap` guarantees.
+ *
+ * A dictionary that happens to expose `get` and `has` methods must still be read as a dictionary,
+ * so a numeric `size` and an iterator are required as well.
+ */
 const isReadonlyMap = <Key, Value>(
   values: ReadonlyMap<Key, Value> | Readonly<Record<PropertyKey, Value>>,
 ): values is ReadonlyMap<Key, Value> =>
+  typeof values['size'] === 'number' &&
   typeof values['get'] === 'function' &&
   typeof values['has'] === 'function' &&
   Symbol.iterator in values;

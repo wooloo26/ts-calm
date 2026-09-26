@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { git, initializeGit, withProject, write } from '#tests/fixtures/project';
 import {
   checkSourceProject as checkProject,
+  checkStaged,
   checkStagedMessage,
-  formatProject,
   withStagedProject,
 } from '@ts-calm/check';
 
@@ -18,7 +18,8 @@ const base = {
   }),
 };
 
-const inspectStaged = (root: string) => withStagedProject(root, checkProject);
+const inspectStaged = (root: string) =>
+  withStagedProject(root, (snapshot) => checkProject(snapshot));
 
 describe('staged snapshots', () => {
   it('checks staged bytes and preserves partially staged worktree/index content', async () => {
@@ -73,6 +74,15 @@ describe('staged snapshots', () => {
       },
     );
   });
+  it('refuses an entry a source snapshot cannot represent', async () => {
+    await withProject({ ...base, 'src/a.ts': 'export const a=null;' }, async (root) => {
+      initializeGit(root);
+      const object = git(root, 'rev-parse', ':src/a.ts').trim();
+      // A symlink entry in the index, without needing to create a real symlink on disk.
+      git(root, 'update-index', '--add', '--cacheinfo', `120000,${object},link`);
+      await expect(checkStaged(root)).rejects.toThrow('cannot be inspected as a source snapshot');
+    });
+  });
   it('detects concurrent changes to the index without reverting them', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) => {
       initializeGit(root);
@@ -113,7 +123,6 @@ describe('CLI exit codes', () => {
         'tsconfig.json',
         '{"compilerOptions":{"strict":true,"module":"NodeNext","target":"ES2024","types":[]},"include":["src/**/*.ts"]}',
       );
-      await formatProject(root, false);
       expect(invoke(root, 'check').status).toBe(0);
       write(root, 'src/a.ts', 'export const a=null;');
       const failed = invoke(root, 'check', '--json');

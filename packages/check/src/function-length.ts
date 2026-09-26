@@ -1,5 +1,7 @@
 import {
   effectiveLineCount,
+  functionMaximumLines,
+  functionWarningLines,
   maskedSource,
   mentionsAllowance,
   parseAllowance,
@@ -13,8 +15,8 @@ export const checkFunctionLength = (
 ): readonly Diagnostic[] => {
   const setting = config.rules?.['function-length'];
   const options = typeof setting === 'object' ? setting : {};
-  const warning = options.warning ?? 80,
-    maximum = options.maximum ?? 150;
+  const warning = options.warning ?? functionWarningLines,
+    maximum = options.maximum ?? functionMaximumLines;
   const masked = maskedSource(source.content, parsed.comments);
   const diagnostics: Diagnostic[] = [];
   const allowances = new Map<number, number>();

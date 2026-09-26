@@ -1,9 +1,7 @@
 {
   "extends": "./packages/check/presets/tsconfig.node.json",
   "compilerOptions": {
-    "types": ["node"],
-    "typeRoots": ["./node_modules/@types"],
     "customConditions": ["source"]
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts"]
+  "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts", "ts-calm.config.ts"]
 }

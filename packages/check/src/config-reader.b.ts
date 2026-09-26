@@ -9,7 +9,7 @@
  */
 import { existsSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { strictChecks } from '#src/types';
 import type { CheckConfig } from '#src/types';
 import { isArray, isPlainObject } from '@ts-calm/fp';
@@ -92,23 +92,49 @@ export const validateConfiguration = (value: unknown): CheckConfig => {
   return config as CheckConfig;
 };
 
-/** @impure Read and execute trusted project configuration. */
-export const loadConfiguration = (root: string): CheckConfig => {
-  const path = join(root, 'ts-calm.config.ts');
-  if (!existsSync(path)) return {};
+/** @impure Walk this directory and its ancestors looking for the project configuration. */
+const configurationPath = (root: string): string => {
+  let directory = resolve(root),
+    found = '';
+  while (!found) {
+    const candidate = join(directory, 'ts-calm.config.ts');
+    if (existsSync(candidate)) found = candidate;
+    else {
+      const parent = dirname(directory);
+      if (parent === directory) break;
+      directory = parent;
+    }
+  }
+  return found;
+};
+
+/**
+ * Load the configuration module with the custom conditions its own `tsconfig.json` declares.
+ *
+ * @impure Reads the filesystem and executes the selected module.
+ * @param path - Absolute path of the module to execute.
+ * @returns The loaded module namespace; the caller narrows it.
+ */
+const loadModule = (path: string): unknown => {
   const load = createRequire(import.meta.url);
   delete load.cache[path];
-  const conditions = compilerConditions(root, 'ts-calm.config.ts', new Map());
+  const conditions = compilerConditions(dirname(path), path, new Map());
   const hooks = registerHooks({
     resolve(specifier, context, next) {
       return next(specifier, { ...context, conditions: [...context.conditions, ...conditions] });
     },
   });
   try {
-    const loaded: unknown = load(path);
-    const module = object(loaded);
-    return validateConfiguration(module['default'] ?? module);
+    return load(path);
   } finally {
     hooks.deregister();
   }
+};
+
+/** @impure Read and execute trusted project configuration. */
+export const loadConfiguration = (root: string): CheckConfig => {
+  const path = configurationPath(root);
+  if (!path) return {};
+  const module = object(loadModule(path));
+  return validateConfiguration(module['default'] ?? module);
 };

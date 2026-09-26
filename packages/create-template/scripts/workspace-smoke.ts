@@ -17,7 +17,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundledTemplateOptions, initializeWorkspace } from '@ts-calm/create-template';
-import { isArray, hasOwn } from '@ts-calm/fp';
 import { run } from '../../check/scripts/consumer.ts';
 
 const repository = fileURLToPath(new URL('../../..', import.meta.url));
@@ -38,11 +37,48 @@ const tarball = (packageName: string): string => {
 };
 const fpTarball = tarball('ts-calm-fp');
 const checkTarball = tarball('ts-calm-check');
+const templateTarball = tarball('ts-calm-create-template');
 const root = mkdtempSync(join(tmpdir(), 'ts-calm-workspace-'));
-const command = (args: readonly string[]): string =>
+const runIn = (directory: string, args: readonly string[]): string =>
   /\.[cm]?js$/.test(pnpmCli)
-    ? run(root, process.execPath, [pnpmCli, ...args])
-    : run(root, pnpmCli, args);
+    ? run(directory, process.execPath, [pnpmCli, ...args])
+    : run(directory, pnpmCli, args);
+const command = (args: readonly string[]): string => runIn(root, args);
+
+/**
+ * Prove the packed template package can render a workspace with no toolchain installed.
+ *
+ * `pnpm dlx @ts-calm/create-template` provides exactly the package and its dependencies, so a
+ * version lookup that reaches for TypeScript, Turbo or Vitest fails here and only here.
+ */
+const proveIsolatedGeneration = (): void => {
+  const isolated = mkdtempSync(join(tmpdir(), 'ts-calm-template-isolated-'));
+  try {
+    writeFileSync(
+      join(isolated, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'template-probe',
+          private: true,
+          type: 'module',
+          dependencies: { '@ts-calm/create-template': fileSpec(templateTarball) },
+        },
+        undefined,
+        2,
+      ) + '\n',
+    );
+    runIn(isolated, ['install', '--ignore-scripts']);
+    const printed = run(isolated, process.execPath, [
+      '--input-type=module',
+      '-e',
+      'const {initializeWorkspace}=await import("@ts-calm/create-template");const result=await initializeWorkspace("./rendered");console.log(result.created.length);',
+    ]);
+    if (Number(printed.trim()) < 10)
+      throw new Error(`The packed template rendered ${printed.trim()} files.`);
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
+};
 const latestSummary = (): unknown => {
   const directory = join(root, '.turbo/runs');
   const file = readdirSync(directory)
@@ -52,16 +88,16 @@ const latestSummary = (): unknown => {
   if (!file) throw new Error('Turbo did not emit its run summary.');
   return JSON.parse(readFileSync(join(directory, file), 'utf8'));
 };
-const cacheStates = (summary: unknown): readonly string[] =>
-  hasOwn(summary, 'tasks') && isArray(summary.tasks)
-    ? summary.tasks.map((task) =>
-        hasOwn(task, 'cache') &&
-        hasOwn(task.cache, 'status') &&
-        typeof task.cache.status === 'string'
-          ? task.cache.status
-          : 'unknown',
-      )
-    : [];
+const cacheStates = (summary: unknown): readonly string[] => {
+  const tasks = (summary as { tasks?: unknown }).tasks;
+  if (!Array.isArray(tasks)) return [];
+  return tasks.map((task: unknown) => {
+    const cache = (task as { cache?: unknown }).cache;
+    const status =
+      typeof cache === 'object' && cache !== null ? (cache as { status?: unknown }).status : '';
+    return typeof status === 'string' ? status : 'unknown';
+  });
+};
 const fileSpec = (path: string): string => `file:${path.replaceAll('\\', '/')}`;
 
 try {
@@ -82,7 +118,10 @@ try {
     writeFileSync(full, JSON.stringify(manifest, null, 2) + '\n');
   }
   command(['install', '--ignore-scripts']);
+  // The generator writes the template verbatim, so the documented first step normalizes the tree
+  // and only then must it be canonical.
   command(['fmt']);
+  command(['fmt:check']);
   command(['lint']);
   command(['build']);
   command(['typecheck']);
@@ -110,6 +149,7 @@ try {
   const started = run(join(root, 'packages/b'), process.execPath, ['run.mjs']);
   if (!started.includes('Hello, reader!'))
     throw new Error('Built output depends on source files or a stale cache.');
+  proveIsolatedGeneration();
   writeFileSync(
     join(release, 'template-check.json'),
     JSON.stringify(
@@ -117,7 +157,8 @@ try {
         template: 'pnpm-turbo',
         checks: [
           'install',
-          'fmt',
+          'fmt normalizes a fresh tree',
+          'fmt:check clean after fmt',
           'lint',
           'build',
           'typecheck',
@@ -127,6 +168,7 @@ try {
           'cache hit',
           'dependency invalidation',
           'run without source',
+          'isolated generation without a toolchain',
         ],
         cached,
         invalidated,
@@ -136,7 +178,7 @@ try {
     ),
   );
   console.log(
-    'Workspace template: install, every command, cache invalidation and source-free execution passed.',
+    'Workspace template: install, every command, isolated generation, cache invalidation and source-free execution passed.',
   );
 } finally {
   if (process.env['TS_CALM_KEEP_WORKSPACE'] === '1') console.log(`Kept workspace at ${root}.`);

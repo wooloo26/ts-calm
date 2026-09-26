@@ -30,6 +30,7 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm check
+      - run: pnpm lint
       - if: runner.os == 'Linux'
         run: pnpm test:coverage
       - if: runner.os != 'Linux'

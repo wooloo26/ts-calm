@@ -17,7 +17,6 @@
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:mutation": "node --conditions=source scripts/mutation.b.ts",
     "bench": "vitest bench --run --config vitest.bench.config.ts",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
@@ -29,8 +28,6 @@
     "verify": "pnpm build && pnpm typecheck && pnpm check && pnpm lint && pnpm fmt:check && pnpm test"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "10.0.0",
-    "@stryker-mutator/vitest-runner": "10.0.0",
     "@ts-calm/check": "workspace:*",
     "@types/node": "24.13.6",
     "@vitest/coverage-v8": "5.0.1",

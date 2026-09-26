@@ -25,30 +25,74 @@ import { validateCommitMessage } from '#src/commit-message';
 import type { Diagnostic } from '#src/types';
 
 /** @impure Execute Git and collect its output. */
-const git = (root: string, args: readonly string[]): Buffer => {
+const git = (root: string, args: readonly string[], input?: string): Buffer => {
   const result = spawnSync('git', ['-C', root, ...args], {
-    maxBuffer: 128 * 1024 * 1024,
+    maxBuffer: 512 * 1024 * 1024,
     windowsHide: true,
+    ...(typeof input === 'string' ? { input } : {}),
   });
   if (result.error || result.status !== 0)
     throw new Error(result.error?.message ?? result.stderr.toString('utf8'));
   return result.stdout;
 };
 
-/** @impure Read Git objects and write this invocation's snapshot. */
-const materialize = (root: string, temporary: string, index: string): void => {
+type IndexEntry = Readonly<{ mode: string; object: string; path: string }>;
+
+const newline = 10;
+/** How one unsupported index mode is named in the failure that reports it. */
+const modeKind = (mode: string): string =>
+  mode === '120000' ? 'symlink' : mode === '160000' ? 'submodule' : `entry of mode ${mode}`;
+
+/** Parse the frozen index, refusing entries a source snapshot cannot represent. */
+const indexEntries = (index: string): readonly IndexEntry[] => {
+  const entries: IndexEntry[] = [];
   for (const entry of index.split('\0').filter(Boolean)) {
     const match = /^(\d+) ([0-9a-f]+) (\d)\t([\s\S]+)$/.exec(entry);
     if (!match || match[3] !== '0')
       throw new Error('Resolve index conflicts before checking staged content.');
-    const mode = match[1],
+    const mode = match[1] ?? '',
       object = match[2] ?? '',
       path = match[4] ?? '';
     if (mode !== '100644' && mode !== '100755')
       throw new Error(
-        `Unsupported staged entry ${path}; symlinks and submodules cannot be inspected as source snapshots.`,
+        `A staged ${modeKind(mode)} cannot be inspected as a source snapshot: ${path}. Unstage it, or check the working tree instead.`,
       );
-    const destination = resolve(temporary, path);
+    entries.push({ mode, object, path });
+  }
+  return entries;
+};
+
+/** @impure Read every distinct staged blob in one Git invocation. */
+const blobs = (root: string, objects: readonly string[]): ReadonlyMap<string, Buffer> => {
+  const wanted = [...new Set(objects)];
+  const output = git(root, ['cat-file', '--batch'], `${wanted.join('\n')}\n`);
+  const contents = new Map<string, Buffer>();
+  let cursor = 0;
+  for (const object of wanted) {
+    const headerEnd = output.indexOf(newline, cursor);
+    if (headerEnd < 0) throw new Error(`git cat-file --batch ended before ${object}.`);
+    const [oid = '', kind = '', size = ''] = output
+      .subarray(cursor, headerEnd)
+      .toString('utf8')
+      .split(' ');
+    const length = Number(size);
+    if (kind !== 'blob' || !Number.isSafeInteger(length) || oid !== object)
+      throw new Error(`git cat-file did not return the staged blob ${object}.`);
+    contents.set(object, output.subarray(headerEnd + 1, headerEnd + 1 + length));
+    cursor = headerEnd + 1 + length + 1;
+  }
+  return contents;
+};
+
+/** @impure Read Git objects and write this invocation's snapshot. */
+const materialize = (root: string, temporary: string, index: string): void => {
+  const entries = indexEntries(index);
+  const contents = blobs(
+    root,
+    entries.map((entry) => entry.object),
+  );
+  for (const entry of entries) {
+    const destination = resolve(temporary, entry.path);
     const within = relative(temporary, destination);
     if (
       !within ||
@@ -57,12 +101,14 @@ const materialize = (root: string, temporary: string, index: string): void => {
       within.startsWith('../') ||
       isAbsolute(within)
     )
-      throw new Error(`Staged path escapes the snapshot: ${path}`);
-    if (path.split(/[\\/]/).some((part) => part === '.git' || part === 'node_modules'))
-      throw new Error(`Do not stage repository internals or dependencies: ${path}`);
+      throw new Error(`Staged path escapes the snapshot: ${entry.path}`);
+    if (entry.path.split(/[\\/]/).some((part) => part === '.git' || part === 'node_modules'))
+      throw new Error(`Do not stage repository internals or dependencies: ${entry.path}`);
+    const content = contents.get(entry.object);
+    if (!content) throw new Error(`No staged content for ${entry.path}.`);
     mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, git(root, ['cat-file', 'blob', object]));
-    if (mode === '100755') chmodSync(destination, 0o755);
+    writeFileSync(destination, content);
+    if (entry.mode === '100755') chmodSync(destination, 0o755);
   }
 };
 
@@ -73,7 +119,8 @@ const materialize = (root: string, temporary: string, index: string): void => {
  * @param root - Any directory inside the inspected Git repository.
  * @param inspect - Async inspection invoked with the snapshot root.
  * @returns The inspection result.
- * @throws If the index has conflicts, changes while checking, or contains unsupported entries.
+ * @throws If the index has conflicts, changes while checking, holds an entry that is not a
+ * regular file, or holds an escaping path.
  */
 export const withStagedProject = async <Value>(
   root: string,

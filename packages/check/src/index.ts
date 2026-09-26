@@ -2,7 +2,7 @@ export { defineConfig } from '#src/configuration';
 export { runChecks, analyzeSources } from '#src/engine';
 export { checkProject } from '#src/project';
 export { checkSourceProject } from '#src/sources.b';
-export { formatProject, lintProject, typecheckProject } from '#src/tools.b';
+export { typecheckProject } from '#src/typecheck.b';
 export { checkStaged, checkStagedMessage, withStagedProject } from '#src/staged.b';
 export { validateCommitMessage } from '#src/commit-message';
 export { formatDiagnostics } from '#src/diagnostics';

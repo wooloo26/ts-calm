@@ -42,6 +42,8 @@ export type PurityModel = {
   exports: Map<string, ExportTarget>;
   stars: { specifier: string }[];
   typeDefs: Map<string, Node>;
+  /** The first import per local name, so a type reference never scans every binding. */
+  importsByName: Map<string, Binding>;
 };
 type Scope = { owner: string; parent?: Scope; names: Map<string, string> };
 
@@ -282,10 +284,14 @@ export const buildPurityModel = (file: AnalyzedFile): PurityModel => {
     exports: new Map(),
     stars: [],
     typeDefs: new Map(),
+    importsByName: new Map(),
   };
   const scope: Scope = { owner: model.module, names: new Map() };
   const program = record(file.parsed.ast);
   walkModel(model, program, scope, {}, 0);
+  for (const binding of model.bindings.values())
+    if (binding.specifier && !model.importsByName.has(binding.name))
+      model.importsByName.set(binding.name, binding);
   for (const binding of model.bindings.values())
     if (!binding.type)
       for (const value of binding.values) {

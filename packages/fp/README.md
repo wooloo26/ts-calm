@@ -3,8 +3,8 @@
 Calm defaults for functional TypeScript: Option and Result containers, shared combinators, safe
 external-value guards and explicit serialization. Node 24+, ESM, MIT.
 
-This package is the runtime. It depends only on `@types/node`, so importing it never loads a
-formatter, linter or compiler.
+This package is the runtime. It has no runtime dependencies and `@types/node` is development-only,
+so importing it never loads a formatter, linter or compiler.
 
 ## Install
 
@@ -31,8 +31,8 @@ const label = match(fromNullable(externalName), {
 | `@ts-calm/fp`          | Containers, combinators, collections, guards, codecs, data DTOs  |
 | `@ts-calm/fp/boundary` | `capture`, `captureAsync`, `captureResult`, `captureResultAsync` |
 
-The package is portable: its own modules import each other relatively and it declares no Node
-subpath (`#`) imports, so a bundler or browser can read the sources as published.
+The package is portable: its runtime modules import each other relatively and use no Node-only
+subpath (`#`) mapping, so a bundler or browser can read the sources as published.
 
 ## What it guarantees
 
