@@ -3,7 +3,6 @@ import type { ImportResolution } from '#src/types';
 
 const normal = (path: string): string => path.replaceAll('\\', '/');
 
-/** Whether the resolved path belongs to another package of the same workspace. */
 const inWorkspacePackage = (resolved: string, workspacePackages: readonly string[]): boolean => {
   const path = normal(resolved);
   return workspacePackages.some((directory) => {
@@ -12,23 +11,6 @@ const inWorkspacePackage = (resolved: string, workspacePackages: readonly string
   });
 };
 
-/**
- * Classify one resolved import for the cycle and boundary rules.
- *
- * A resolution that entered a package `exports` map is a dependency, even when the package
- * directory sits inside the inspected root (a monorepo workspace). A path inside a sibling
- * workspace package is a dependency too, so one workspace package does not have to reach
- * into its neighbor's sources. Everything else inside `root` that the caller actually
- * analyzed is a project edge.
- *
- * @param root - Absolute inspected project root.
- * @param owned - Root-relative paths that the caller actually analyzed.
- * @param specifier - The original import specifier, used in diagnostics.
- * @param resolved - Absolute resolved filesystem path.
- * @param packageTarget - Whether the resolver entered the target package's exports map.
- * @param workspacePackages - Absolute directories of sibling workspace packages.
- * @returns The resolution classification.
- */
 export const classifyTarget = (
   root: string,
   owned: ReadonlySet<string>,

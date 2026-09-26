@@ -26,7 +26,6 @@ export type JsonIssue = Readonly<{
 }>;
 
 type PendingValue = Readonly<{ value: unknown; leaving: boolean }>;
-/** Normalize a thrown value into a JSON issue without inspecting an uninspectable message. */
 const fault = (code: JsonIssue['code'], fallback: string, cause: unknown): JsonIssue => ({
   code,
   message: cause instanceof Error ? cause.message : fallback,

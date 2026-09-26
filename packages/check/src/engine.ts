@@ -57,7 +57,6 @@ const checkFile = (file: AnalyzedFile, config: CheckConfig): readonly Diagnostic
 const importKey = (file: string, imported: ImportFact): string =>
   `${file}\0${imported.offset}\0${imported.specifier}\0${imported.typeOnly}`;
 
-/** Imports the parser saw but the caller never resolved. */
 const missingResolutions = (
   analyzed: readonly AnalyzedFile[],
   imports: readonly ResolvedImport[],
@@ -78,7 +77,6 @@ const missingResolutions = (
   return diagnostics;
 };
 
-/** Resolutions that point outside the inspected source set or failed outright. */
 const brokenResolutions = (
   analyzed: readonly AnalyzedFile[],
   imports: readonly ResolvedImport[],
@@ -105,17 +103,6 @@ const brokenResolutions = (
   return diagnostics;
 };
 
-/**
- * Apply every rule to sources that were already analyzed.
- *
- * `checkSourceProject` analyzes once, resolves the import graph from those facts and lands here,
- * so a full check parses and models each file exactly once.
- *
- * @param analyzed - The selected files paired with their parser facts.
- * @param config - Optional explicit configuration.
- * @param imports - The resolved import graph for those files.
- * @returns Every source-rule diagnostic, sorted by file, position and rule.
- */
 export const runAnalyzedChecks = (
   analyzed: readonly AnalyzedFile[],
   config: CheckConfig = {},

@@ -1,9 +1,3 @@
-/**
- * @boundary Prove a generated workspace in a real install: package the published tarballs, render the template and run every documented command.
- * @effects node:child_process
- * @effects node:fs
- * @allow strict-fp/no-throw -- A generated workspace that cannot install, build, check or run must fail this release check.
- */
 import {
   existsSync,
   mkdtempSync,
@@ -45,12 +39,6 @@ const runIn = (directory: string, args: readonly string[]): string =>
     : run(directory, pnpmCli, args);
 const command = (args: readonly string[]): string => runIn(root, args);
 
-/**
- * Prove the packed template package can render a workspace with no toolchain installed.
- *
- * `pnpm dlx @ts-calm/create-template` provides exactly the package and its dependencies, so a
- * version lookup that reaches for TypeScript, Turbo or Vitest fails here and only here.
- */
 const proveIsolatedGeneration = (): void => {
   const isolated = mkdtempSync(join(tmpdir(), 'ts-calm-template-isolated-'));
   try {
@@ -118,8 +106,6 @@ try {
     writeFileSync(full, JSON.stringify(manifest, null, 2) + '\n');
   }
   command(['install', '--ignore-scripts']);
-  // The generator writes the template verbatim, so the documented first step normalizes the tree
-  // and only then must it be canonical.
   command(['fmt']);
   command(['fmt:check']);
   command(['lint']);

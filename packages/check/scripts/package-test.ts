@@ -1,9 +1,3 @@
-/**
- * @boundary Pack the workspace packages into a release directory and prove them in isolated consumer installs.
- * @effects node:child_process
- * @effects node:fs
- * @allow strict-fp/no-throw -- Unpublishable metadata and unexpected packed content must fail the release check.
- */
 import {
   cpSync,
   existsSync,
@@ -62,7 +56,6 @@ const internalRanges = new Map<string, string>([
 ]);
 const vendored =
   /(?:^|[\\/])(?:node_modules|tests|fixtures|benchmarks|scripts|\.turbo|\.local|tsconfig\.json|tsconfig\.build\.json|vitest\.config\.ts)(?:[\\/]|$)/;
-/** Replace workspace-only ranges so the tarball installs exactly like the published package. */
 const stage = (packageName: string): string => {
   const source = join(packages, packageName);
   const staging = mkdtempSync(join(tmpdir(), `ts-calm-pack-${packageName}-`));
@@ -134,7 +127,6 @@ const unexpected = files.filter(
   (path) => !/^(dist|presets)\//.test(path) && !allowed.includes(path),
 );
 if (unexpected.length) throw new Error(`Unexpected packed content: ${unexpected.join(', ')}`);
-/** Specifiers a published file may import: its dependencies, Node builtins and itself. */
 const checkManifest = manifestOf('check');
 const published = new Set([
   ...Object.keys(
@@ -145,7 +137,6 @@ const published = new Set([
   ...builtinModules,
   '@ts-calm/check',
 ]);
-/** The package a bare specifier belongs to, so a dependency subpath still counts as published. */
 const packageNameOf = (name: string): string => {
   const parts = name.split('/');
   return name.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? name);

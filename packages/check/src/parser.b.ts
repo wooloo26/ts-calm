@@ -10,7 +10,6 @@ import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from '#
 export type Node = Readonly<Record<string, unknown>>;
 export type Child = Readonly<{ key: string; node: Node }>;
 type Environment = ReadonlyMap<string, string>;
-/** Shared stand-in for a value that is not an AST node, so a miss allocates nothing. */
 const absent: Node = Object.freeze({});
 export const record = (value: unknown): Node =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Node) : absent;
@@ -22,10 +21,6 @@ export const functionNode = (node: Node): boolean =>
   ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
     text(node, 'type'),
   );
-/**
- * The parsed tree is immutable, and every rule walks it many times, so each node's child list is
- * computed once and cached. The cache is weak, so a discarded program cannot be retained.
- */
 const childCache = new WeakMap<Node, readonly Child[]>();
 export const children = (node: Node): readonly Child[] => {
   const cached = childCache.get(node);

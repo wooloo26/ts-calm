@@ -3,12 +3,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-/**
- * Host configuration that must not leak into an isolated consumer install.
- *
- * A developer's own npm settings can otherwise change the tested command, so they are removed
- * instead of being reported as a package defect.
- */
 const hostOnlyVariables = [
   'npm_config_allow_scripts',
   'npm_config_allowscripts',
@@ -25,15 +19,6 @@ const isolatedEnvironment = (): Readonly<Record<string, string>> => {
   return environment;
 };
 
-/**
- * Run one command in a directory and return its standard output.
- *
- * @param cwd - Working directory for the child process.
- * @param command - Executable to start.
- * @param args - Arguments passed verbatim.
- * @returns Captured standard output.
- * @throws If the process cannot start or exits with a non-zero status.
- */
 export const run = (cwd: string, command: string, args: readonly string[]): string => {
   const result = spawnSync(command, args, {
     cwd,
@@ -112,21 +97,6 @@ assert.equal(runChecks({files:[{path:'src/value.ts',content:'export const value=
 assert.deepEqual(await checkProject(process.cwd()),[]);
 `;
 
-/**
- * Prove one packed release in a real, isolated consumer project.
- *
- * Installs the packed `@ts-calm/fp` and `@ts-calm/check` tarballs with the requested package
- * manager, runs `init` twice to prove idempotence, checks the generated sources with the
- * installed CLI, executes the runtime entry, and finally proves that importing the functional
- * entry point loads no check tool. Both `npm exec` and a direct CLI invocation must work.
- *
- * @param fpTarball - Absolute path of the packed `@ts-calm/fp` tarball.
- * @param checkTarball - Absolute path of the packed `@ts-calm/check` tarball.
- * @param npmCli - Path of the npm CLI script.
- * @param pnpmCli - Path or command of the pnpm CLI.
- * @param manager - Package manager used for the isolated install.
- * @throws If any install, init, check, CLI or runtime step fails.
- */
 export const checkConsumer = async (
   fpTarball: string,
   checkTarball: string,
@@ -143,7 +113,6 @@ export const checkConsumer = async (
         name: 'consumer',
         private: true,
         dependencies: { '@ts-calm/fp': spec(fpTarball), '@ts-calm/check': spec(checkTarball) },
-        // The tool ships no Node type definitions, so a checked project installs its own.
         devDependencies: { '@types/node': '24.13.6' },
       }),
     );

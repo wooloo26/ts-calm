@@ -35,9 +35,7 @@ describe('configuration discovery', () => {
         'src/a.ts': 'export const f=()=>undefined;',
       },
       async (root) => {
-        // The project configuration disables strict-fp for every file it covers.
         expect(await checkSourceProject(root)).toEqual([]);
-        // Checking the nested directory uses the nested configuration: only no-null is off.
         expect((await checkSourceProject(join(root, 'src'))).map((issue) => issue.rule)).toContain(
           'strict-fp/no-undefined',
         );

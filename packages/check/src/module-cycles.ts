@@ -5,7 +5,6 @@ type Edge = Readonly<{ from: string; to: string; target: string; offset: number 
 const directory = (path: string): string =>
   path.replaceAll('\\', '/').split('/').slice(0, -1).join('/') || '.';
 
-/** Collapse the resolved file graph, retaining a source witness for every inter-directory edge. */
 export const checkModuleCycles = (
   files: readonly SourceFile[],
   imports: readonly ResolvedImport[],

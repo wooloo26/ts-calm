@@ -7,9 +7,7 @@ export type RuleName =
   | 'no-module-cycles'
   | 'strict-fp'
   | 'purity';
-// Purity is a bounded source convention, not a general proof.
 
-/** Every `strict-fp` sub-check, in the order they are reported. */
 export const strictChecks = [
   'no-throw',
   'no-try',
@@ -92,22 +90,17 @@ export type CheckConfig = Readonly<{
     >;
   }>[];
 }>;
-/** One leading doc comment, as reported by the parser. */
 export type SourceComment = Readonly<{ text: string; start: number; end: number }>;
-/** One function declaration with the offsets needed to measure and annotate it. */
 export type FunctionFact = Readonly<{
   name: string;
   start: number;
   bodyStart: number;
   bodyEnd: number;
-  /** Whether the body is a brace-delimited block, so the braces are not counted as lines. */
   bodyBlock: boolean;
 }>;
 /** One import or re-export, including type-only forms. */
 export type ImportFact = Readonly<{ specifier: string; offset: number; typeOnly: boolean }>;
-/** One parser fact, such as a matched strict-fp sub-check or a declared effect. */
 export type Fact = Readonly<{ name: string; offset: number }>;
-/** Everything the parser recorded for one source file. */
 export type ParsedSource = Readonly<{
   ast?: unknown;
   comments: readonly SourceComment[];
@@ -118,7 +111,6 @@ export type ParsedSource = Readonly<{
   issues: readonly Fact[];
   hasImplementation: boolean;
 }>;
-/** One analyzed source file, pairing the text with its parser facts. */
 export type AnalyzedFile = Readonly<{ source: SourceFile; parsed: ParsedSource }>;
 /**
  * Where one import points: a checked project file, an installed dependency, or a resolution

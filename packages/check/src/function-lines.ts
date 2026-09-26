@@ -1,8 +1,6 @@
 import type { FunctionFact, SourceComment } from '#src/types';
 
-/** Effective body lines at which a function is reported as a warning. */
 export const functionWarningLines = 80;
-/** Effective body lines above which a function is an error. */
 export const functionMaximumLines = 150;
 const allowanceMarker = 'calm-allow-next-function';
 
@@ -33,7 +31,6 @@ const countContentLines = (text: string): number => {
   return count;
 };
 
-/** The body range that belongs to the function itself, excluding its own braces. */
 const bodyRange = (fact: FunctionFact): Readonly<{ start: number; end: number }> =>
   fact.bodyBlock
     ? { start: fact.bodyStart + 1, end: fact.bodyEnd - 1 }

@@ -21,12 +21,6 @@ export type InitResult = Readonly<{
   /** Non-fatal notes about preserved decisions. */
   warnings: readonly string[];
 }>;
-/**
- * An identity replacer.
- *
- * `JSON.stringify` only reaches its indent argument if a replacer is supplied, and both `null` and
- * `undefined` are forbidden literals here, so this is the one spelling that needs no allowance.
- */
 const keep = (_key: string, item: unknown): unknown => item;
 const pretty = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n';
 

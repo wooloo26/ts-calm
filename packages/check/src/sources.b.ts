@@ -43,7 +43,6 @@ export const checkSourceProject = async (
   const files: SourceFile[] = paths
     .filter((path) => selected(path, config))
     .map((path) => ({ path, content: readFileSync(join(root, path), 'utf8') }));
-  // One analysis feeds both the import graph and the rules, so every file is parsed once.
   const analyzed = analyzeSources({ files }, config);
   const imports = resolveImports(root, analyzed, paths);
   return runAnalyzedChecks(analyzed, config, imports);

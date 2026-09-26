@@ -11,7 +11,6 @@ export type OptionData<Value> =
   | Readonly<{ present: true; value: Value }>
   | Readonly<{ present: false }>;
 
-// DTOs are deliberately explicit. Validate untrusted decoded data at the application boundary.
 /**
  * Convert a result into its publishable DTO.
  *

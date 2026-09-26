@@ -1,10 +1,3 @@
-/**
- * @boundary Build the check package with the pinned compiler, without a network install.
- * @effects node:child_process
- * @effects node:fs
- * @effects node:module
- * @allow strict-fp/no-throw -- A missing dependency or failing compiler must stop the build.
- */
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';

@@ -146,7 +146,6 @@ describe('project import graph', () => {
     await withProject(
       { 'src/a.ts': 'import {ok} from "ts-calm"; export const a=ok(1);' },
       async (root) => {
-        // An uninstalled dependency is an actionable resolution failure.
         expect((await checkProject(root)).map((issue) => issue.rule)).toContain('imports/resolve');
       },
     );

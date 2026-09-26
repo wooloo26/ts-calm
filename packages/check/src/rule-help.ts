@@ -105,14 +105,6 @@ export const helpForRule = (rule: string): RuleHelp | false => ruleHelpEntries[r
 export const documentationFor = (rule: string): string =>
   `https://github.com/wooloo26/ts-calm/blob/main/docs/rules.md#${rule.replaceAll('/', '-')}`;
 
-/**
- * Render the published rule guide.
- *
- * The generator script and the test that keeps `docs/rules.md` honest both call this, so the
- * guide cannot drift from {@link ruleHelpEntries}.
- *
- * @returns The complete markdown of the rule guide.
- */
 export const renderRuleGuide = (): string => {
   const sections = Object.entries(ruleHelpEntries).map(
     ([rule, help]) =>

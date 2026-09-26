@@ -2,7 +2,6 @@ import type { CheckConfig, RuleName } from '#src/types';
 
 export const defineConfig = (config: CheckConfig): CheckConfig => config;
 
-/** Small path glob matcher: `*`, `**` and `?` only; always use forward slashes. */
 export const matches = (path: string, pattern: string): boolean => {
   let expression = '^';
   for (let index = 0; index < pattern.length; index += 1) {

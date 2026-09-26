@@ -22,12 +22,10 @@ const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonl
       );
   });
 
-/** How many propagation rounds a project may take before its effect declarations settle. */
 const maximumRounds = 3;
 const sameMembers = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean =>
   left.size === right.size && [...left].every((item) => right.has(item));
 
-/** Build the shared project view and the binding-to-model index the evaluator relies on. */
 const projectOf = (
   files: readonly AnalyzedFile[],
   imports: readonly ResolvedImport[],
@@ -54,12 +52,6 @@ const projectOf = (
   };
 };
 
-/**
- * Evaluate every candidate until the set of changing bindings and declared effects stops growing.
- *
- * The propagation order no longer changes the answer, and a settled project costs one evaluation
- * per candidate per round instead of one per inspection stage.
- */
 const settle = (
   project: Project,
   candidates: readonly FunctionModel[],

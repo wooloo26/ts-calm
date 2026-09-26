@@ -36,12 +36,6 @@ const execute = (root: string, executable: string, args: readonly string[]) => {
   return { status: result.status ?? 2, stdout: result.stdout, stderr: result.stderr };
 };
 
-/**
- * Parse the report `tsc --pretty false` prints, including its global diagnostics.
- *
- * A line that matches neither form continues the previous message, which is how the compiler
- * renders a multi-line explanation.
- */
 const typeDiagnostics = (
   output: string,
   normalize: (file: string) => string,

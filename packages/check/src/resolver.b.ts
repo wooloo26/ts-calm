@@ -90,7 +90,6 @@ export const resolveImports = (
         let resolved = selectedResolver.resolveFileSync(origin, imported.specifier);
         const packageSpecifier = !/^[.#]/.test(imported.specifier);
         if (packageSpecifier && (!resolved.path || resolved.builtin)) {
-          // A package entry point never falls back to development source; retry without it.
           const plainKey = `${imported.typeOnly}:plain`;
           let plainResolver = resolverCache.get(plainKey);
           if (!plainResolver) {

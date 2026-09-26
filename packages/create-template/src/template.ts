@@ -17,12 +17,6 @@ export type WorkspaceTemplateOptions = Readonly<{
 /** One generated workspace file, path-keyed relative to the destination directory. */
 export type WorkspaceFile = Readonly<{ path: string; content: string }>;
 
-/**
- * An identity replacer.
- *
- * `JSON.stringify` only reaches its indent argument if a replacer is supplied, and both `null` and
- * `undefined` are forbidden literals under `strict-fp`, so this is the spelling that needs none.
- */
 const keep = (_key: string, item: unknown): unknown => item;
 const json = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n';
 
@@ -58,7 +52,6 @@ const rootPackage = (options: WorkspaceTemplateOptions): string =>
     engines: { node: '>=24' },
     scripts: {
       build: 'turbo run build',
-      // The package projects build through references; this also checks every test file.
       typecheck: 'turbo run typecheck && tsc --noEmit -p tsconfig.json',
       test: 'turbo run test',
       fmt: 'oxfmt --write .',
@@ -143,8 +136,6 @@ export const workspaceTemplate = (options: WorkspaceTemplateOptions): readonly W
     '.gitignore': 'node_modules/\ndist/\n.turbo/\n.local/\ncoverage/\n*.tsbuildinfo\n',
     'oxlint.config.ts': "import preset from '@ts-calm/check/oxlint';\n\nexport default preset;\n",
     'oxfmt.config.ts': "import preset from '@ts-calm/check/oxfmt';\nexport default preset;\n",
-    // A root project so the configuration files and every test file are covered by the compiler.
-    // `customConditions` resolves the sibling workspace package to its sources, not its build.
     'tsconfig.json': json({
       extends: '@ts-calm/check/tsconfig.node.json',
       compilerOptions: { types: [], customConditions: ['source'] },

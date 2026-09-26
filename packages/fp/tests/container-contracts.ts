@@ -15,7 +15,6 @@ import {
 } from '@ts-calm/fp';
 import type { Option } from '@ts-calm/fp';
 
-/** The three-argument form of `filter`, which the public overloads accept only for a `Result`. */
 const filterOptionWithMapper = filter as unknown as (
   value: Option<number>,
   predicate: (value: number) => boolean,

@@ -39,11 +39,9 @@ const git = (root: string, args: readonly string[], input?: string): Buffer => {
 type IndexEntry = Readonly<{ mode: string; object: string; path: string }>;
 
 const newline = 10;
-/** How one unsupported index mode is named in the failure that reports it. */
 const modeKind = (mode: string): string =>
   mode === '120000' ? 'symlink' : mode === '160000' ? 'submodule' : `entry of mode ${mode}`;
 
-/** Parse the frozen index, refusing entries a source snapshot cannot represent. */
 const indexEntries = (index: string): readonly IndexEntry[] => {
   const entries: IndexEntry[] = [];
   for (const entry of index.split('\0').filter(Boolean)) {

@@ -101,12 +101,6 @@ export function lookup<Key, Value>(
   return Object.hasOwn(record, property) ? some(record[property] as Value) : none();
 }
 
-/**
- * Detect a map by the whole shape a `ReadonlyMap` guarantees.
- *
- * A dictionary that happens to expose `get` and `has` methods must still be read as a dictionary,
- * so a numeric `size` and an iterator are required as well.
- */
 const isReadonlyMap = <Key, Value>(
   values: ReadonlyMap<Key, Value> | Readonly<Record<PropertyKey, Value>>,
 ): values is ReadonlyMap<Key, Value> =>
@@ -115,12 +109,6 @@ const isReadonlyMap = <Key, Value>(
   typeof values['has'] === 'function' &&
   Symbol.iterator in values;
 
-/**
- * Read every own property of a dictionary, including symbols, without inherited keys.
- *
- * @param values - The dictionary to enumerate.
- * @returns Own `[key, value]` pairs in property order.
- */
 export const ownEntries = <Value>(
   values: Readonly<Record<PropertyKey, Value>>,
 ): readonly (readonly [PropertyKey, Value])[] =>

@@ -7,14 +7,6 @@ import { format } from 'oxfmt';
 import { isArray, isPlainObject } from '@ts-calm/fp';
 import { renderRuleGuide } from '#src/rule-help';
 
-/**
- * Every published entry point is checked against its built declaration file, because that file
- * is exactly what a consumer reads. Re-exports are followed to the declaration that owns the
- * documentation. A documented export carries a leading JSDoc block whose summary is prose, and
- * every function documents each of its parameters with `@param`.
- *
- * Run `pnpm build` before this test; it reads `dist`, not `src`.
- */
 const packages = ['@ts-calm/fp', '@ts-calm/check', '@ts-calm/create-template'] as const;
 const load = createRequire(import.meta.url);
 
@@ -30,12 +22,6 @@ const offset = (value: unknown): number => {
   return typeof value0 === 'number' ? value0 : 0;
 };
 
-/**
- * The JSDoc blocks directly above a declaration, joined.
- *
- * The walk stops at the first non-whitespace character, so an unrelated file header is not
- * mistaken for documentation.
- */
 const documentationBefore = (source: string, position: number): string => {
   const blocks: string[] = [];
   let cursor = position;
@@ -61,7 +47,6 @@ const summaryOf = (comment: string): string =>
     .filter((line) => line.length > 0 && !line.startsWith('@'))
     .join(' ');
 
-/** Split a parameter list into names, ignoring nested generics, defaults and destructuring. */
 const declaredParameterNames = (signature: string): readonly string[] => {
   const names: string[] = [];
   let depth = 0;
@@ -86,10 +71,6 @@ const declaredParameterNames = (signature: string): readonly string[] => {
     .filter((parameter) => !['readonly', 'public', 'private', 'protected'].includes(parameter));
 };
 
-/**
- * Every parameter list a callable declares: the first signature list and, for a
- * `const name: (args) => Result` declaration, the list inside the type annotation.
- */
 const parameterNames = (text: string): readonly string[] => {
   const signatures: string[] = [];
   for (const match of text.matchAll(/\(/g)) {
@@ -114,7 +95,6 @@ const parameterNames = (text: string): readonly string[] => {
   return declaredParameterNames(annotated ?? first);
 };
 
-/** Resolve a declaration specifier, including the package's own `#` mappings. */
 const targetFile = (from: string, specifier: string, directory: string): string => {
   const candidates: string[] = [];
   const packageFile = resolve(directory, 'package.json');
@@ -141,15 +121,6 @@ const targetFile = (from: string, specifier: string, directory: string): string 
 
 type Problem = (name: string, reason: string) => void;
 
-/**
- * Walk the exported surface of one declaration file, reporting documentation problems.
- *
- * @param file - Absolute declaration file that is currently being inspected.
- * @param directory - Absolute package directory that owns the `#` import mappings.
- * @param seen - Files already visited for this entry point, which stops re-export cycles.
- * @param report - Sink for each undocumented or under-documented export.
- * @param required - Names that must be found in this file, for a followed re-export list.
- */
 const walk = (
   file: string,
   directory: string,
@@ -243,7 +214,6 @@ const walk = (
     walk(entry.file, directory, visited, report, [entry.local]);
 };
 
-/** Exported names of one entry point, taken from the declaration file that re-exports them. */
 const exportedNames = (file: string, source: string): readonly string[] => {
   const names: string[] = [];
   for (const raw of parseSync(file, source).program.body) {
@@ -266,7 +236,6 @@ const namedExportNames = (file: string, source: string): readonly string[] =>
 describe('published API documentation', () => {
   it('keeps the generated rule guide in step with the rule help', async () => {
     const guide = readFileSync(new URL('../../../docs/rules.md', import.meta.url), 'utf8');
-    // `pnpm run docs` renders the guide and then formats it, so the file must equal both steps.
     const formatted = await format('docs/rules.md', renderRuleGuide(), {
       singleQuote: true,
       printWidth: 100,

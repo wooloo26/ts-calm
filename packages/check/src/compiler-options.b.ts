@@ -12,7 +12,6 @@ import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { isArray, isPlainObject } from '@ts-calm/fp';
 
-/** Whether a directory is the limit itself or one of its descendants, compared by path segment. */
 const isInside = (directory: string, limit: string): boolean => {
   const path = relative(limit, directory);
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));

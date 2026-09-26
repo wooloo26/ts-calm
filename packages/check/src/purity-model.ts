@@ -42,7 +42,6 @@ export type PurityModel = {
   exports: Map<string, ExportTarget>;
   stars: { specifier: string }[];
   typeDefs: Map<string, Node>;
-  /** The first import per local name, so a type reference never scans every binding. */
   importsByName: Map<string, Binding>;
 };
 type Scope = { owner: string; parent?: Scope; names: Map<string, string> };

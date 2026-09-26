@@ -60,7 +60,6 @@ const main = async (): Promise<void> => {
   }
   if (command === 'init') {
     if (template && template !== 'pnpm-turbo') throw new Error(`Unknown template ${template}.`);
-    // Loaded on demand: checking, explaining and commit-message never need a formatter or generator.
     const result = template
       ? await (await import('@ts-calm/create-template')).initializeWorkspace(root)
       : await (await import('#src/init.b')).initializeProject(root);

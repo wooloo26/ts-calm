@@ -98,7 +98,6 @@ export function match<Value, Problem, Present, Absent>(
   value: Result<Value, Problem> | Option<Value> | AsyncResult<Value, Problem>,
   cases: ResultCases<Value, Problem, Present, Absent> | OptionCases<Value, Present, Absent>,
 ): Present | Absent | Promise<Present | Absent | Awaited<Present | Absent>> {
-  // Public overloads prove the container/case correlation; no payload is asserted.
   if ('then' in value)
     return value.then((result) =>
       match(result, cases as ResultCases<Value, Problem, Present, Absent>),
@@ -111,7 +110,6 @@ export function match<Value, Problem, Present, Absent>(
   return isSome(value) ? handlers.some(get(value)) : handlers.none();
 }
 
-// The Option overload guarantees a zero-argument fallback on this branch.
 const callWithoutInput = <Problem, Output>(callback: (problem: Problem) => Output): Output =>
   (callback as () => Output)();
 

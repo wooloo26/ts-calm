@@ -33,21 +33,13 @@ export type Evaluation = {
   writes: Set<string>;
   executed: Set<string>;
   fresh: Map<string, Value>;
-  /**
-   * Results of analyzed call sites, keyed by invocation and then by node range.
-   *
-   * A frame is created once per invocation and its environment never changes, so the frame
-   * identifies the environment without serializing it on every call.
-   */
   calls: Map<Frame, Map<string, readonly Value[]>>;
-  /** Call sites that are still being evaluated, keyed like {@link Evaluation.calls}. */
   activeCalls: Map<Frame, Set<string>>;
 };
 export type Project = Readonly<{
   models: ReadonlyMap<string, PurityModel>;
   functions: ReadonlyMap<string, FunctionModel>;
   bindings: ReadonlyMap<string, Binding>;
-  /** The model that declares each binding, so a reference never scans every model. */
   owners: ReadonlyMap<string, PurityModel>;
   targets: ReadonlyMap<string, string>;
   custom: readonly string[];

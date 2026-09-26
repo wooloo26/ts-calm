@@ -27,7 +27,6 @@ export const checkFunctionLength = (
   for (const comment of parsed.comments.filter(mentionsAllowance)) {
     const allowance = parseAllowance(comment);
     const target = parsed.functions.find((fact) => fact.start >= comment.end);
-    // Only declaration keywords/bindings may occur before the function expression.
     const gap = target ? masked.slice(comment.end, target.start).trim() : '!';
     const attached =
       target &&

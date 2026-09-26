@@ -37,8 +37,6 @@ describe('pnpm + Turbo template', () => {
     const check = manifest('packages/check/package.json');
     const fp = manifest('packages/fp/package.json');
     const dependencies = check['dependencies'] as Record<string, string>;
-    // The formatter and linter belong to the repository and to a generated workspace, not to a
-    // published package, so the root manifest owns those pins.
     const rootDev = root['devDependencies'] as Record<string, string>;
     expect(toolchainVersions.fp).toBe(fp['version']);
     expect(toolchainVersions.check).toBe(check['version']);
@@ -65,7 +63,6 @@ describe('pnpm + Turbo template', () => {
   });
 
   it('depends on nothing at runtime', () => {
-    // A published generator that resolves a version or formats a file would need an install graph.
     expect(manifest('packages/create-template/package.json')['dependencies']).toBeUndefined();
   });
 

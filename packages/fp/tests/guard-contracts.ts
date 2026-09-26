@@ -25,7 +25,6 @@ const guards = {
 type GuardName = keyof typeof guards;
 const names = Object.keys(guards) as readonly GuardName[];
 
-/** The guards that must answer `true`, as the only true predicates for that value. */
 const cases: readonly (readonly [string, unknown, readonly GuardName[]])[] = [
   ['null', null, ['isNull']],
   ['undefined', undefined, ['isUndefined']],
