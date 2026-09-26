@@ -1,7 +1,4 @@
 {
-  "extends": "./presets/tsconfig.node.json",
-  "compilerOptions": {
-    "customConditions": ["source"]
-  },
+  "extends": "../../tsconfig.json",
   "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"]
 }

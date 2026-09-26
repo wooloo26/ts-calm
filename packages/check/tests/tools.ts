@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   checkProject,
@@ -15,29 +15,22 @@ const tsconfig = JSON.stringify({
   include: ['src/**/*.ts'],
 });
 const base = { 'tsconfig.json': tsconfig };
-const baselineLint = JSON.stringify({
-  plugins: ['typescript'],
-  rules: {
-    'typescript/no-floating-promises': 'error',
-    'typescript/no-explicit-any': 'error',
-    'typescript/no-non-null-assertion': 'error',
-  },
-});
+const ownedRule =
+  /^(?:commit-message|function-length|boundary|no-file-cycles|no-module-cycles|strict-fp|purity)(?:\/|$)/;
+const onlyOwnedRules = (issues: readonly { rule: string }[]): boolean =>
+  issues.every((issue) => ownedRule.test(issue.rule));
 
 describe('complete static checking', () => {
-  it('reports source rules only, leaving formatting and linting to their own tools', async () => {
+  it('reports only the rules this tool owns', async () => {
     await withProject(
       {
         ...base,
-        '.oxlintrc.json': baselineLint,
         'src/a.ts':
           'export const name:string=42;\nexport function run(){Promise.resolve(1);return null;}',
       },
       async (root) => {
         const diagnostics = await checkProject(root);
-        expect(diagnostics.some((item) => item.rule === 'fmt/format')).toBe(false);
-        expect(diagnostics.some((item) => item.rule.includes('no-floating-promises'))).toBe(false);
-        expect(diagnostics.some((item) => item.rule === 'typecheck/TS2322')).toBe(false);
+        expect(onlyOwnedRules(diagnostics)).toBe(true);
         const absence = diagnostics.find((item) => item.rule === 'strict-fp/no-null');
         expect(absence?.help).toContain('fromNullable');
         expect(absence?.docs).toContain('ts-calm');
@@ -66,23 +59,21 @@ describe('complete static checking', () => {
   });
   it('does not skip a missing compiler configuration', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) =>
-      expect(() => typecheckProject(root)).toThrow('ts-calm init'),
+      expect(() => typecheckProject(root)).toThrow('tsconfig.json is missing'),
     );
   });
 });
 
 describe('initialization and guidance', () => {
-  it('leaves existing configs, package manager, dependencies and workspace settings untouched', async () => {
+  it('leaves existing manifests and project files untouched', async () => {
     await withProject(
       {
         ...base,
-        '.oxlintrc.jsonc': '{}',
-        '.oxfmtrc.jsonc': '{}',
         'package.json':
           '{"type":"commonjs","packageManager":"pnpm@11.22.0","workspaces":["packages/*"],"dependencies":{"example":"1.0.0"}}',
       },
       async (root) => {
-        const paths = ['package.json', 'tsconfig.json', '.oxlintrc.jsonc', '.oxfmtrc.jsonc'];
+        const paths = ['package.json', 'tsconfig.json'];
         const before = paths.map((path) => readFileSync(join(root, path)));
         const result = await initializeProject(root);
         expect(result.created).toEqual([]);
@@ -92,13 +83,17 @@ describe('initialization and guidance', () => {
       },
     );
   });
-  it('writes the configuration it creates without calling a formatter', async () => {
+  it('creates only the ESM manifest and no compiler configuration', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) => {
-      const result = await initializeProject(root);
-      expect(result.created).toEqual(['tsconfig.json']);
-      expect(result.updated).toEqual([]);
-      const written = readFileSync(join(root, 'tsconfig.json'), 'utf8');
-      expect(JSON.parse(written).extends).toBe('@ts-calm/check/tsconfig.node.json');
+      rmSync(join(root, 'package.json'));
+      expect(await initializeProject(root)).toEqual({
+        created: ['package.json'],
+        updated: [],
+        warnings: [],
+      });
+      expect(existsSync(join(root, 'tsconfig.json'))).toBe(false);
+      const written = readFileSync(join(root, 'package.json'), 'utf8');
+      expect(JSON.parse(written)).toEqual({ type: 'module' });
       expect(written.endsWith('\n')).toBe(true);
       expect(await initializeProject(root)).toEqual({
         created: [],
@@ -123,7 +118,7 @@ it('runs the source rules against the staged snapshot rather than the working tr
     const index = git(root, 'ls-files', '--stage', '-z');
     const issues = await checkStaged(root);
     expect(issues.some((item) => item.rule === 'strict-fp/no-null')).toBe(true);
-    expect(issues.some((item) => item.rule === 'fmt/format')).toBe(false);
+    expect(onlyOwnedRules(issues)).toBe(true);
     expect(git(root, 'ls-files', '--stage', '-z')).toBe(index);
   });
 });

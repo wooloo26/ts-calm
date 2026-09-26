@@ -36,10 +36,7 @@ Convert external absence with fromNullable. Use at/lookup for possibly missing c
 
 ```ts
 import { lookup, match } from '@ts-calm/fp';
-const label = match(lookup(record, 'name'), {
-  some: (value) => String(value),
-  none: () => 'missing',
-});
+const label = match(lookup(record, 'name'), { some: value => String(value), none: () => 'missing' });
 ```
 
 ## strict-fp-no-any
@@ -57,7 +54,7 @@ Prefer narrowing guards or a Decoder. Use branded only after validation. A neces
 
 ```ts
 import { isArray } from '@ts-calm/fp';
-const count = (value: unknown) => (isArray(value) ? value.length : 0);
+const count = (value: unknown) => isArray(value) ? value.length : 0;
 ```
 
 ## strict-fp-no-non-null

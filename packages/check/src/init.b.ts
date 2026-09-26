@@ -1,5 +1,5 @@
 /**
- * @boundary Create missing configuration, preserving existing project choices and dependencies.
+ * @boundary Create the missing Node ESM manifest choice, preserving existing project decisions.
  * @effects node:fs
  * @allow strict-fp/no-throw -- Invalid or concurrently changed metadata must not be overwritten.
  */
@@ -8,10 +8,11 @@ import { join } from 'node:path';
 import { isPlainObject } from '@ts-calm/fp';
 
 /**
- * The configuration files created or updated by one `init` invocation.
+ * The files created or updated by one `init` invocation.
  *
- * `warnings` carries choices that were preserved but may need attention, such as an existing
- * `type=commonjs` manifest.
+ * Only `package.json` is ever created or updated; compiler, formatter and linter files belong to
+ * the project's own toolchain. `warnings` carries choices that were preserved but may need
+ * attention, such as an existing `type=commonjs` manifest.
  */
 export type InitResult = Readonly<{
   /** Project-relative paths created by this call. */
@@ -27,11 +28,10 @@ const pretty = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n'
 /**
  * Create the missing Node ESM project configuration.
  *
- * @impure Reads and writes project configuration files.
- * Existing files and existing manifest choices are preserved; only a missing `tsconfig.json`
- * and a missing ESM `type` are added, written exactly as JSON so no formatter is involved.
- * Compiler, formatter and linter presets are re-exported from `@ts-calm/check` by the generated
- * workspace instead of copied into a project.
+ * @impure Reads and writes the project manifest.
+ * Existing files and existing manifest choices are preserved; only a missing ESM `type` is added,
+ * written exactly as JSON so no formatter is involved. A project provides its own `tsconfig.json`,
+ * formatter and linter configuration, so nothing else is created here.
  *
  * @param root - Absolute project root.
  * @returns The created and updated paths plus any warnings.
@@ -45,16 +45,6 @@ export const initializeProject = async (root: string): Promise<InitResult> => {
   const previous = existsSync(packagePath) ? readFileSync(packagePath, 'utf8') : '';
   const manifest: unknown = previous ? JSON.parse(previous) : {};
   if (!isPlainObject(manifest)) throw new Error('package.json must contain an object.');
-  const contents = new Map<string, string>();
-  if (!existsSync(join(root, 'tsconfig.json')))
-    contents.set(
-      'tsconfig.json',
-      pretty({
-        extends: '@ts-calm/check/tsconfig.node.json',
-        include: ['**/*.ts', '**/*.tsx'],
-        exclude: ['node_modules', 'dist', 'build', '.local', 'coverage'],
-      }),
-    );
   if (!Object.hasOwn(manifest, 'type')) {
     const content = pretty({ ...manifest, type: 'module' });
     if (previous) {
@@ -62,14 +52,13 @@ export const initializeProject = async (root: string): Promise<InitResult> => {
         throw new Error('package.json changed during init; retry.');
       writeFileSync(packagePath, content);
       updated.push('package.json');
-    } else contents.set('package.json', content);
+    } else {
+      writeFileSync(packagePath, content, { flag: 'wx' });
+      created.push('package.json');
+    }
   } else if (manifest['type'] !== 'module')
     warnings.push(
       `Kept package.json type=${String(manifest['type'])}; adjust your module configuration before using Node ESM exports.`,
     );
-  for (const [path, content] of contents) {
-    writeFileSync(join(root, path), content, { flag: 'wx' });
-    created.push(path);
-  }
   return { created, updated, warnings };
 };

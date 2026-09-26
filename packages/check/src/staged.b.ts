@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -20,7 +21,6 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { loadConfiguration } from '#src/config-reader.b';
 import { checkProject } from '#src/project';
-import { hasInstalledDependencies } from '#src/resolver.b';
 import { validateCommitMessage } from '#src/commit-message';
 import type { Diagnostic } from '#src/types';
 
@@ -83,7 +83,7 @@ const blobs = (root: string, objects: readonly string[]): ReadonlyMap<string, Bu
 };
 
 /** @impure Read Git objects and write this invocation's snapshot. */
-const materialize = (root: string, temporary: string, index: string): void => {
+const materialize = (root: string, temporary: string, index: string): readonly IndexEntry[] => {
   const entries = indexEntries(index);
   const contents = blobs(
     root,
@@ -108,6 +108,30 @@ const materialize = (root: string, temporary: string, index: string): void => {
     writeFileSync(destination, content);
     if (entry.mode === '100755') chmodSync(destination, 0o755);
   }
+  return entries;
+};
+
+/**
+ * Link the installed dependencies of every staged package into the snapshot.
+ *
+ * A workspace package keeps its own dependencies, so linking only the repository root would report
+ * every package-private import as unresolved.
+ *
+ * @impure Creates the snapshot's dependency links.
+ */
+const linkDependencies = (
+  repository: string,
+  temporary: string,
+  entries: readonly IndexEntry[],
+): void => {
+  for (const entry of entries) {
+    if (!/(?:^|\/)package\.json$/.test(entry.path)) continue;
+    const directory = dirname(entry.path);
+    const installed = join(repository, directory, 'node_modules');
+    const destination = join(temporary, directory, 'node_modules');
+    if (existsSync(installed) && !existsSync(destination))
+      symlinkSync(realpathSync(installed), destination, 'junction');
+  }
 };
 
 /**
@@ -128,13 +152,8 @@ export const withStagedProject = async <Value>(
   const before = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
   const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-staged-'));
   try {
-    materialize(repository, temporary, before);
-    if (hasInstalledDependencies(repository))
-      symlinkSync(
-        realpathSync(join(repository, 'node_modules')),
-        join(temporary, 'node_modules'),
-        'junction',
-      );
+    const entries = materialize(repository, temporary, before);
+    linkDependencies(repository, temporary, entries);
     const result = await inspect(temporary);
     const after = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
     if (before !== after) throw new Error('Git index changed while checking; retry.');

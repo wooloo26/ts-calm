@@ -4,7 +4,7 @@
  * @effects oxc-resolver
  * @allow strict-fp/no-try -- Malformed package metadata or resolver failures become resolution diagnostics.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { ResolverFactory } from 'oxc-resolver';
 import { classifyTarget } from '#src/resolution';
@@ -139,7 +139,3 @@ export const resolveImports = (
     }
   return result;
 };
-
-/** @impure Inspect the project dependency directory. */
-export const hasInstalledDependencies = (root: string): boolean =>
-  existsSync(join(root, 'node_modules'));

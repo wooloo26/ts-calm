@@ -1,4 +1,9 @@
-import { packageManagerVersion, toolchainVersions } from './toolchain.ts';
+import {
+  workspaceRootDevDependencies,
+  workspaceRootFiles,
+  workspaceRootManifest,
+  workspaceRootScripts,
+} from './workspace-files.b.ts';
 
 /** The pinned toolchain and package versions written into a generated workspace. */
 export type WorkspaceTemplateOptions = Readonly<{
@@ -20,6 +25,15 @@ export type WorkspaceFile = Readonly<{ path: string; content: string }>;
 const keep = (_key: string, item: unknown): unknown => item;
 const json = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n';
 
+/** Scripts that only make sense in this repository; every other script is shared with a workspace. */
+const repositoryOnlyScripts = ['bench', 'docs', 'test:package', 'test:template'];
+
+/** Commands a generated workspace runs through its published `ts-calm` binary. */
+const publishedScripts: Readonly<Record<string, string>> = {
+  check: 'ts-calm check',
+  'commit-message': 'ts-calm commit-message',
+};
+
 const testConfig = `import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -28,47 +42,50 @@ export default defineConfig({
   test: { include: ['tests/**/*.ts'] },
 });
 `;
-const projectConfig = (references: readonly { path: string }[]): unknown => ({
-  extends: '@ts-calm/check/tsconfig.node.json',
-  compilerOptions: {
-    composite: true,
-    noEmit: false,
-    declaration: true,
-    rewriteRelativeImportExtensions: true,
-    rootDir: 'src',
-    outDir: 'dist',
-    types: [],
-  },
-  include: ['src/**/*.ts'],
-  ...(references.length > 0 ? { references } : {}),
+
+const versions = (options: WorkspaceTemplateOptions): Readonly<Record<string, string>> => ({
+  '@ts-calm/check': options.checkVersion,
+  '@ts-calm/fp': options.fpVersion,
+  turbo: options.turbo,
+  typescript: options.compiler,
+  vitest: options.vitest,
 });
 
-const rootPackage = (options: WorkspaceTemplateOptions): string =>
+/**
+ * The development dependencies shared by every generated manifest.
+ *
+ * The shape and the pinned names come from this repository's own manifest; the versions come from
+ * {@link WorkspaceTemplateOptions}, so a published template pins the toolchain it shipped with.
+ */
+const workspaceDevDependencies = (
+  options: WorkspaceTemplateOptions,
+): Readonly<Record<string, string>> => {
+  const dependencies: Record<string, string> = { ...workspaceRootDevDependencies };
+  for (const [name, version] of Object.entries(versions(options)))
+    if (name in dependencies) dependencies[name] = version;
+  return dependencies;
+};
+
+/** The scripts shared by every generated manifest, with repository-only scripts removed. */
+const workspaceScripts = (): Readonly<Record<string, string>> => {
+  const scripts: Record<string, string> = {};
+  for (const [name, command] of Object.entries(workspaceRootScripts)) {
+    if (repositoryOnlyScripts.includes(name)) continue;
+    scripts[name] = publishedScripts[name] ?? command;
+  }
+  return scripts;
+};
+
+/** The generated workspace root manifest, derived from this repository's own manifest. */
+const workspaceManifest = (options: WorkspaceTemplateOptions): string =>
   json({
     name: 'typescript-workspace',
     private: true,
-    type: 'module',
-    packageManager: packageManagerVersion,
-    engines: { node: '>=24' },
-    scripts: {
-      build: 'turbo run build',
-      typecheck: 'turbo run typecheck && tsc --noEmit -p tsconfig.json',
-      test: 'turbo run test',
-      fmt: 'oxfmt --write .',
-      'fmt:check': 'oxfmt --check .',
-      lint: 'oxlint --type-aware .',
-      check: 'ts-calm check',
-    },
-    devDependencies: {
-      '@ts-calm/check': options.checkVersion,
-      '@ts-calm/fp': options.fpVersion,
-      oxfmt: toolchainVersions.oxfmt,
-      oxlint: toolchainVersions.oxlint,
-      'oxlint-tsgolint': toolchainVersions.oxlintTsgolint,
-      turbo: options.turbo,
-      typescript: options.compiler,
-      vitest: options.vitest,
-    },
+    type: workspaceRootManifest['type'],
+    packageManager: workspaceRootManifest['packageManager'],
+    engines: workspaceRootManifest['engines'],
+    scripts: workspaceScripts(),
+    devDependencies: workspaceDevDependencies(options),
   });
 
 const packageManifest = (
@@ -94,24 +111,41 @@ const packageManifest = (
       typecheck: 'tsc -b tsconfig.json',
       test: 'vitest run',
     },
-    devDependencies: {
-      '@ts-calm/check': options.checkVersion,
-      '@ts-calm/fp': options.fpVersion,
-      oxfmt: toolchainVersions.oxfmt,
-      oxlint: toolchainVersions.oxlint,
-      'oxlint-tsgolint': toolchainVersions.oxlintTsgolint,
-      typescript: options.compiler,
-      vitest: options.vitest,
-    },
+    devDependencies: workspaceDevDependencies(options),
     ...extra,
   });
+
+/**
+ * One generated package project.
+ *
+ * The package inherits the root compiler options, but clears the root's `source` condition:
+ * a composite build must consume the referenced package's declarations, not its sources.
+ */
+const projectConfig = (references: readonly { path: string }[]): unknown => ({
+  extends: '../../tsconfig.json',
+  compilerOptions: {
+    composite: true,
+    noEmit: false,
+    declaration: true,
+    rewriteRelativeImportExtensions: true,
+    rootDir: 'src',
+    outDir: 'dist',
+    types: [],
+    customConditions: [],
+  },
+  include: ['src/**/*.ts'],
+  ...(references.length > 0 ? { references } : {}),
+});
 
 /**
  * Render a complete private pnpm + Turbo workspace as an ordered, path-keyed file set.
  *
  * The function is pure: nothing is written, and identical options always produce identical
- * content. Two example packages show the layout: `@workspace/a` depends on `@ts-calm/fp` and
- * `@workspace/b` depends on `@workspace/a`, so a single root command covers the whole graph.
+ * content. Every workspace-level file — rules, compiler project, test runner, task runner, package
+ * manager, hooks and editor defaults — is rendered from this repository's own files, so the
+ * repository is the template. Two example packages show the layout: `@workspace/a` depends on
+ * `@ts-calm/fp` and `@workspace/b` depends on `@workspace/a`, so a single root command covers the
+ * whole graph.
  *
  * @param options - Pinned dependency versions to write into the generated manifests. Use
  * {@link bundledTemplateOptions} for the versions this package was published with.
@@ -124,31 +158,10 @@ const packageManifest = (
  */
 export const workspaceTemplate = (options: WorkspaceTemplateOptions): readonly WorkspaceFile[] => {
   const files: Record<string, string> = {
-    'package.json': rootPackage(options),
-    'pnpm-workspace.yaml': 'packages:\n  - packages/*\nallowBuilds:\n  esbuild: true\n',
-    'turbo.json': json({
-      tasks: {
-        build: { dependsOn: ['^build'], outputs: ['dist/**'] },
-        typecheck: { dependsOn: ['^build'], outputs: [] },
-        test: { dependsOn: ['^build'], outputs: [] },
-      },
-    }),
-    '.gitignore': 'node_modules/\ndist/\n.turbo/\n.local/\ncoverage/\n*.tsbuildinfo\n',
-    'oxlint.config.ts': "import preset from '@ts-calm/check/oxlint';\n\nexport default preset;\n",
-    'oxfmt.config.ts': "import preset from '@ts-calm/check/oxfmt';\nexport default preset;\n",
-    'tsconfig.json': json({
-      extends: '@ts-calm/check/tsconfig.node.json',
-      compilerOptions: { types: [], customConditions: ['source'] },
-      include: ['*.ts', 'packages/*/src/**/*.ts', 'packages/*/tests/**/*.ts'],
-    }),
-    'vitest.config.ts': `import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: { projects: ['packages/*/vitest.config.ts'] },
-});
-`,
+    ...workspaceRootFiles,
+    'package.json': workspaceManifest(options),
     'README.md':
-      '# TypeScript workspace\n\n`pnpm install` then `pnpm fmt`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm check`, `pnpm test`.\n\nPackages own their builds and tests. Internal imports are relative and keep the `.ts` extension, which works in Node, bundlers and browsers alike.\n',
+      '# TypeScript workspace\n\n`pnpm install` then `pnpm fmt`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm check`, `pnpm test`.\n\nRules, compiler options, the test runner, the task runner, hooks and editor defaults come from the `@ts-calm/create-template` repository, so the workspace starts from exactly that setup. Packages own their builds and tests. Internal imports are relative and keep the `.ts` extension, which works in Node, bundlers and browsers alike.\n',
     'packages/a/package.json': packageManifest('a', options, {
       dependencies: { '@ts-calm/fp': options.fpVersion },
     }),
@@ -184,7 +197,7 @@ test('rejects empty and non-text input', () => {
 });
 `,
     'packages/b/package.json': packageManifest('b', options, {
-      dependencies: { '@workspace/a': 'workspace:*' },
+      dependencies: { '@workspace/a': 'workspace:*', '@ts-calm/fp': options.fpVersion },
     }),
     'packages/b/tsconfig.json': json(projectConfig([{ path: '../a' }])),
     'packages/b/src/index.ts': "export { greet } from './greet.ts';\n",

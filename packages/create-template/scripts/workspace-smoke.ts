@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundledTemplateOptions, initializeWorkspace } from '@ts-calm/create-template';
 import { run } from '../../check/scripts/consumer.ts';
+import { workspaceRootFileNames } from '../src/workspace-files.b.ts';
 
 const repository = fileURLToPath(new URL('../../..', import.meta.url));
 const release = join(repository, '.local/release');
@@ -59,10 +60,16 @@ const proveIsolatedGeneration = (): void => {
     const printed = run(isolated, process.execPath, [
       '--input-type=module',
       '-e',
-      'const {initializeWorkspace}=await import("@ts-calm/create-template");const result=await initializeWorkspace("./rendered");console.log(result.created.length);',
+      `const {initializeWorkspace}=await import("@ts-calm/create-template");const {readFileSync}=await import("node:fs");const result=await initializeWorkspace("./rendered");const files={};for(const name of ${JSON.stringify(workspaceRootFileNames)}){if(name!=="package.json")files[name]=readFileSync("./rendered/"+name,"utf8");}console.log(JSON.stringify({count:result.created.length,files}));`,
     ]);
-    if (Number(printed.trim()) < 10)
-      throw new Error(`The packed template rendered ${printed.trim()} files.`);
+    const probe = JSON.parse(printed) as { count?: number; files?: Record<string, string> };
+    if ((probe.count ?? 0) < 10)
+      throw new Error(`The packed template rendered ${String(probe.count)} files.`);
+    for (const name of workspaceRootFileNames) {
+      if (name === 'package.json') continue;
+      if (probe.files?.[name] !== readFileSync(join(repository, name), 'utf8'))
+        throw new Error(`The packed template shipped a stale ${name}.`);
+    }
   } finally {
     rmSync(isolated, { recursive: true, force: true });
   }
@@ -90,6 +97,19 @@ const fileSpec = (path: string): string => `file:${path.replaceAll('\\', '/')}`;
 
 try {
   await initializeWorkspace(root);
+  for (const name of workspaceRootFileNames) {
+    if (name === 'package.json') continue;
+    if (readFileSync(join(root, name), 'utf8') !== readFileSync(join(repository, name), 'utf8'))
+      throw new Error(`The generated ${name} does not match this repository.`);
+  }
+  const generated = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    scripts?: Record<string, string>;
+  };
+  if (generated.scripts?.['check'] !== 'ts-calm check')
+    throw new Error('The generated workspace does not run the published check command.');
+  for (const name of ['bench', 'docs', 'test:package', 'test:template'])
+    if (name in (generated.scripts ?? {}))
+      throw new Error(`The generated workspace inherited the repository-only script ${name}.`);
   const versions = bundledTemplateOptions();
   for (const path of ['package.json', 'packages/a/package.json', 'packages/b/package.json']) {
     const full = join(root, path),
@@ -113,6 +133,7 @@ try {
   command(['typecheck']);
   command(['check']);
   command(['test']);
+  command(['test:coverage']);
   command(['exec', 'turbo', 'run', 'build', '--summarize']);
   const cached = cacheStates(latestSummary());
   if (cached.length !== 2 || cached.some((value) => value !== 'HIT'))
@@ -143,6 +164,8 @@ try {
         template: 'pnpm-turbo',
         checks: [
           'install',
+          'repository files rendered verbatim',
+          'derived manifest drops repository-only scripts',
           'fmt normalizes a fresh tree',
           'fmt:check clean after fmt',
           'lint',
@@ -150,6 +173,7 @@ try {
           'typecheck',
           'check',
           'test',
+          'test:coverage',
           'run',
           'cache hit',
           'dependency invalidation',

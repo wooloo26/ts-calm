@@ -1,0 +1,12 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      glob: '*.{ts,tsx,js,mjs,cjs,json,jsonc,md,yml,yaml}'
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+    - name: check
+      run: pnpm run check --staged
+commit-msg:
+  jobs:
+    - name: commit message
+      run: pnpm run commit-message --file {1}

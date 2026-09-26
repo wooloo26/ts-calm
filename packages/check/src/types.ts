@@ -31,7 +31,7 @@ export type StrictCheck = (typeof strictChecks)[number];
  * `help` and `docs` are present only when the rule can point at a fix or a guide section.
  */
 export type Diagnostic = Readonly<{
-  /** The reporting rule, such as `strict-fp/no-null` or `fmt/format`. */
+  /** The reporting rule, such as `strict-fp/no-null` or `boundary/undeclared`. */
   rule: string;
   /** Project-relative path with forward slashes. */
   file: string;

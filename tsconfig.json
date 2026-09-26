@@ -1,7 +1,30 @@
 {
-  "extends": "./packages/check/presets/tsconfig.node.json",
   "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedSideEffectImports": true,
+    "noImplicitOverride": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
     "customConditions": ["source"]
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts", "ts-calm.config.ts"]
+  "include": ["*.ts", "packages/*/*.ts", "packages/*/src/**/*.ts", "packages/*/tests/**/*.ts"]
 }

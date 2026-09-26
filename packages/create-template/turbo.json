@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/turbo/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.editorconfig",
+        "$TURBO_ROOT$/.gitattributes",
+        "$TURBO_ROOT$/.gitignore",
+        "$TURBO_ROOT$/.node-version",
+        "$TURBO_ROOT$/.oxfmtrc.json",
+        "$TURBO_ROOT$/.oxlintrc.json",
+        "$TURBO_ROOT$/lefthook.yml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/pnpm-workspace.yaml",
+        "$TURBO_ROOT$/tsconfig.json",
+        "$TURBO_ROOT$/turbo.json",
+        "$TURBO_ROOT$/vitest.config.ts"
+      ]
+    }
+  }
+}

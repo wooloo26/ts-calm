@@ -2,6 +2,7 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
+  lefthook: true
 minimumReleaseAgeExclude:
   - '@types/node@24.13.6'
   - '@turbo/darwin-64@2.11.4'

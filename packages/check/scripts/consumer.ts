@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -97,6 +97,25 @@ assert.equal(runChecks({files:[{path:'src/value.ts',content:'export const value=
 assert.deepEqual(await checkProject(process.cwd()),[]);
 `;
 
+const compilerConfig = `{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["**/*.ts"]
+}
+`;
+const esmType = (path: string): unknown => {
+  const manifest: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  return typeof manifest === 'object' && manifest !== null && 'type' in manifest
+    ? manifest.type
+    : undefined;
+};
+
 export const checkConsumer = async (
   fpTarball: string,
   checkTarball: string,
@@ -129,11 +148,15 @@ export const checkConsumer = async (
     else run(consumer, pnpmCli, ['install', '--ignore-scripts']);
     const cli = join(consumer, 'node_modules/@ts-calm/check/dist/cli.b.js');
     run(consumer, process.execPath, [cli, 'init']);
-    const configs = ['package.json', 'tsconfig.json'];
-    const before = configs.map((path) => readFileSync(join(consumer, path), 'utf8'));
+    if (esmType(join(consumer, 'package.json')) !== 'module')
+      throw new Error('init did not add the ESM module type.');
+    if (existsSync(join(consumer, 'tsconfig.json')))
+      throw new Error('init created a compiler configuration.');
+    const before = readFileSync(join(consumer, 'package.json'), 'utf8');
     run(consumer, process.execPath, [cli, 'init']);
-    if (configs.some((path, index) => readFileSync(join(consumer, path), 'utf8') !== before[index]))
+    if (readFileSync(join(consumer, 'package.json'), 'utf8') !== before)
       throw new Error('init is not idempotent.');
+    writeFileSync(join(consumer, 'tsconfig.json'), compilerConfig);
     mkdirSync(join(consumer, 'src'));
     mkdirSync(join(consumer, 'tests'));
     writeFileSync(join(consumer, 'src/main.b.ts'), source);
@@ -145,6 +168,8 @@ export const checkConsumer = async (
     const explanation = run(consumer, process.execPath, [cli, 'explain', 'strict-fp/no-try']);
     if (!explanation.includes('captureAsync')) throw new Error('Missing functional guidance.');
     run(consumer, process.execPath, [npmCli, 'exec', '--offline', '--', 'ts-calm', 'check']);
+    // Guard the runtime package: @ts-calm/fp must load without any tool in this workspace,
+    // including the formatter and linter this package deliberately does not carry.
     const runtimeOnly = run(consumer, process.execPath, [
       '--input-type=module',
       '-e',

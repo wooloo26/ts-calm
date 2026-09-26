@@ -15,13 +15,14 @@
 pnpm add -D @ts-calm/check
 pnpm add @ts-calm/fp
 pnpm exec ts-calm init
-pnpm exec ts-calm typecheck
 pnpm exec ts-calm check
+pnpm exec ts-calm typecheck   # 使用项目自己的 tsconfig.json
 ```
 
 运行时与工具是两个包。`@ts-calm/check` 只带固定版本的 parser、resolver 和编译器；
-导入 `@ts-calm/fp` 不会加载它们。格式与 lint 仍由项目自己的脚本负责，所以两个包都不引入
-格式化器或 linter —— 只把它们各自的预设作为纯数据再导出。
+导入 `@ts-calm/fp` 不会加载它们。检查工具只负责自己的源码规则和编译器调用：`typecheck`
+读取项目自己的 `tsconfig.json`，格式与 lint 由项目自己的脚本负责。
+`@ts-calm/create-template` 生成的 workspace 已经把这些都接好。
 包管理、构建和测试仍由项目决定。
 
 ## 命令与功能
@@ -30,7 +31,7 @@ pnpm exec ts-calm check
 | ------------------------------ | ------------------------------------------------------------ |
 | `check` / `check --staged`     | 源码规则：检查工作区 / 检查冻结的 Git 暂存内容               |
 | `typecheck`                    | 用固定版本编译器检查项目自己的 `tsconfig.json`               |
-| `init`                         | 补齐缺失的 Node ESM 配置，不覆盖已有选择                     |
+| `init`                         | 补上缺失的 ESM `type`，不覆盖已有选择                        |
 | `init --template pnpm-turbo`   | 调用 `@ts-calm/create-template` 生成 workspace               |
 | `explain <规则>`               | 查看原因及函数式替代写法                                     |
 | `commit-message --file <路径>` | 检查 `scope - verb description`，例如 `fp - add safe guards` |
@@ -42,7 +43,6 @@ pnpm exec ts-calm check
 - `@ts-calm/fp`：Result、Option、组合函数、类型守卫、集合工具和 Codec。
 - `@ts-calm/fp/boundary`：capture/captureAsync 及其 Result 版本。
 - `@ts-calm/check`：检查 API 与 CheckConfig。
-- `@ts-calm/check/tsconfig.node.json`、`/oxlint`、`/oxfmt`：内置预设。
 - 七条源码规则：提交消息、函数长度、边界、文件循环、目录循环、strict-fp、purity。
 - 包内使用相对路径并保留 `.ts` 后缀，Node、打包器和浏览器都能解析；只属于 Node 的 `#`
   映射浏览器读不到，所以面向 web 的运行时包不使用它。
@@ -62,6 +62,8 @@ pnpm fmt && pnpm lint && pnpm typecheck && pnpm build && pnpm check && pnpm test
 
 生成私有 `packages/a` + `packages/b` workspace，带 Turbo、project references、每包测试和可运行示例。
 目标必须不存在或为空，不自动安装依赖或启动进程。
+所有 workspace 级文件都取自本仓库自身：规则、编译器项目、测试运行器、任务运行器、包管理器设置、
+Git hooks 和编辑器默认值都从根目录复制，生成的 `package.json` 由本仓库的 manifest 派生。
 
 ## 发布
 
@@ -94,5 +96,14 @@ pnpm verify      # build、typecheck、check、lint、fmt:check、test
 
 其他门禁：`pnpm test:coverage`、`pnpm bench`、`pnpm test:package`、`pnpm test:template`。
 报告在 `.local/reports`。
+`pnpm install` 同时安装 Lefthook hooks：`pre-commit` 检查暂存文件的格式与源码规则，
+`commit-msg` 检查提交信息。
+
+本仓库同时就是模板。`@ts-calm/create-template` 用本仓库根目录的文件渲染生成的 workspace：
+`.editorconfig`、`.gitattributes`、`.gitignore`、`.node-version`、`.oxfmtrc.json`、`.oxlintrc.json`、
+`lefthook.yml`、`tsconfig.json`、`turbo.json`、`pnpm-workspace.yaml`、`vitest.config.ts` 逐字节复制，
+生成的 `package.json` 由本仓库 manifest 派生：去掉只属于本仓库的脚本，工具链版本改用打包版本。
+包的构建会把这些文件复制到 `dist/template-files`，所以安装后的生成器带的是同一套设置。
 行为改动按 TDD：先失败测试，再实现，再重构。文档修改不硬凑测试。
 修改规则说明后用 `pnpm run docs` 更新指南；有测试保证 `docs/rules.md` 与规则说明一致。
+该文件由生成器逐字拥有，所以 `pnpm fmt` 会忽略它。

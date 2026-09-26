@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { builtinModules } from 'node:module';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -54,14 +54,19 @@ const internalRanges = new Map<string, string>([
     fileRange(join(release, `ts-calm-create-template-${versionOf('create-template')}.tgz`)),
   ],
 ]);
-const vendored =
+// Files that belong to development rather than to the published package. Everything inside `dist`
+// is a published artifact, including files whose names match this pattern.
+const developmentOnly =
   /(?:^|[\\/])(?:node_modules|tests|fixtures|benchmarks|scripts|\.turbo|\.local|tsconfig\.json|tsconfig\.build\.json|vitest\.config\.ts)(?:[\\/]|$)/;
 const stage = (packageName: string): string => {
   const source = join(packages, packageName);
   const staging = mkdtempSync(join(tmpdir(), `ts-calm-pack-${packageName}-`));
   cpSync(source, staging, {
     recursive: true,
-    filter: (path) => !vendored.test(path.slice(source.length)),
+    filter: (path) => {
+      const relative = path.slice(source.length);
+      return relative.startsWith(`${sep}dist${sep}`) || !developmentOnly.test(relative);
+    },
   });
   const manifest = manifestOf(packageName);
   for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
@@ -123,11 +128,30 @@ const files = manifest.files.map((file) =>
   hasOwn(file, 'path') && isString(file.path) ? file.path : '',
 );
 const allowed = ['package.json', 'LICENSE', 'README.md'];
-const unexpected = files.filter(
-  (path) => !/^(dist|presets)\//.test(path) && !allowed.includes(path),
-);
+const unexpected = files.filter((path) => !path.startsWith('dist/') && !allowed.includes(path));
 if (unexpected.length) throw new Error(`Unexpected packed content: ${unexpected.join(', ')}`);
 const checkManifest = manifestOf('check');
+const declaredIn = (manifest: Record<string, unknown>, section: string): readonly string[] => {
+  const entries = manifest[section];
+  return typeof entries === 'object' && entries ? Object.keys(entries) : [];
+};
+const bundledToolchain = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+]
+  .flatMap((section) => declaredIn(checkManifest, section))
+  .filter((name) => ['oxfmt', 'oxlint', 'oxlint-tsgolint'].includes(name));
+if (bundledToolchain.length)
+  throw new Error(`Bundled formatter or linter dependency ${bundledToolchain.join(', ')}.`);
+const bundledExports = declaredIn(checkManifest, 'exports').filter((name) =>
+  /oxlint|oxfmt|tsconfig/u.test(name),
+);
+if (bundledExports.length)
+  throw new Error(
+    `Bundled formatter, linter or compiler preset export ${bundledExports.join(', ')}.`,
+  );
 const published = new Set([
   ...Object.keys(
     typeof checkManifest['dependencies'] === 'object' && checkManifest['dependencies']
@@ -178,7 +202,7 @@ writeFileSync(
         'type declarations',
         'init idempotence',
         'pinned compiler',
-        'no published formatter or linter import',
+        'no bundled formatter, linter or compiler presets',
         'CLI',
         'independent functional entry',
       ],

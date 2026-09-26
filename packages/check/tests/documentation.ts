@@ -3,7 +3,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { parseSync } from 'oxc-parser';
-import { format } from 'oxfmt';
 import { isArray, isPlainObject } from '@ts-calm/fp';
 import { renderRuleGuide } from '#src/rule-help';
 
@@ -234,13 +233,9 @@ const namedExportNames = (file: string, source: string): readonly string[] =>
   exportedNames(file, source).filter((entry) => entry !== 'default');
 
 describe('published API documentation', () => {
-  it('keeps the generated rule guide in step with the rule help', async () => {
+  it('keeps the generated rule guide in step with the rule help', () => {
     const guide = readFileSync(new URL('../../../docs/rules.md', import.meta.url), 'utf8');
-    const formatted = await format('docs/rules.md', renderRuleGuide(), {
-      singleQuote: true,
-      printWidth: 100,
-    });
-    expect(guide).toBe(formatted.code);
+    expect(guide).toBe(renderRuleGuide());
   });
   for (const packageName of packages)
     it(`documents every export of ${packageName}`, () => {

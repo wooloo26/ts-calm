@@ -4,8 +4,8 @@ import type { CheckConfig, Diagnostic } from '#src/types';
 /**
  * Apply the source rules to one project.
  *
- * Formatting and linting are project scripts (`oxfmt`, `oxlint`), and type checking is the
- * `typecheck` command, so `check` reports only the rules this tool owns.
+ * Only the rules this tool owns are reported. Formatting, linting and the compiler configuration
+ * belong to the project's own toolchain, so no other tool is invoked here.
  *
  * @impure Reads project files from disk.
  * @param root - Absolute project root.

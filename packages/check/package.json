@@ -1,13 +1,12 @@
 {
   "name": "@ts-calm/check",
   "version": "0.1.0",
-  "description": "The complete TypeScript check command: pinned format, type-aware lint, compiler and source-rule checks with reusable APIs and build presets.",
+  "description": "Source-rule checking and pinned-compiler typechecking for TypeScript projects, with reusable APIs.",
   "keywords": [
     "architecture",
     "boundary",
     "check",
-    "lint",
-    "oxlint",
+    "typecheck",
     "typescript"
   ],
   "homepage": "https://github.com/wooloo26/ts-calm#readme",
@@ -24,7 +23,6 @@
   },
   "files": [
     "dist",
-    "presets",
     "README.md"
   ],
   "type": "module",
@@ -42,18 +40,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./oxlint": {
-      "source": "./src/oxlint.b.ts",
-      "types": "./dist/oxlint.b.d.ts",
-      "import": "./dist/oxlint.b.js"
-    },
-    "./oxfmt": {
-      "source": "./src/oxfmt.b.ts",
-      "types": "./dist/oxfmt.b.d.ts",
-      "import": "./dist/oxfmt.b.js"
-    },
-    "./tsconfig.json": "./presets/tsconfig.strict.json",
-    "./tsconfig.node.json": "./presets/tsconfig.node.json",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -70,9 +56,6 @@
   },
   "devDependencies": {
     "@types/node": "24.13.6",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
-    "oxlint-tsgolint": "7.0.2002",
     "vitest": "5.0.1"
   },
   "engines": {

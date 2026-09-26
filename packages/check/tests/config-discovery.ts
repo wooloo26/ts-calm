@@ -52,6 +52,6 @@ describe('configuration discovery', () => {
     expect(configuration.rules?.['commit-message']).toMatchObject({
       scopes: expect.arrayContaining(['root', 'fp', 'check', 'template']),
     });
-    expect(configuration.effectImports).toEqual(['oxc-resolver', 'oxfmt']);
+    expect(configuration.effectImports).toEqual(['oxc-resolver']);
   });
 });

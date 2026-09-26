@@ -34,6 +34,30 @@ describe('staged snapshots', () => {
       expect(readFileSync(join(root, 'src/a.ts'))).toEqual(worktree);
     });
   });
+  it('links the installed dependencies of a staged workspace package', async () => {
+    await withProject(
+      {
+        ...base,
+        '.gitignore': 'node_modules/\n',
+        'packages/app/package.json': JSON.stringify({
+          name: '@workspace/app',
+          private: true,
+          type: 'module',
+        }),
+        'packages/app/node_modules/dep/package.json': JSON.stringify({
+          name: 'dep',
+          type: 'module',
+          main: 'index.js',
+        }),
+        'packages/app/node_modules/dep/index.js': 'export const dep = 1;\n',
+        'packages/app/src/a.ts': 'import { dep } from "dep";\nexport const value = dep;\n',
+      },
+      async (root) => {
+        initializeGit(root);
+        expect(await inspectStaged(root)).toEqual([]);
+      },
+    );
+  });
   it('uses the staged configuration in both check directions', async () => {
     await withProject(
       {
