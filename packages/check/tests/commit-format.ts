@@ -24,17 +24,21 @@ it('honors explicit rule, ASCII, scope and length settings', () => {
   });
 });
 
-it('uses scope - verb description and rejects the previous grammar', () => {
+it('requires scope - description and accepts any wording after it', () => {
   expect(validateCommitMessage('fp - add safe array guards')).toEqual([]);
+  expect(validateCommitMessage('fp - shape the array guards')).toEqual([]);
   expect(
     validateCommitMessage('feat(fp): add safe array guards').some(
       (item) => item.rule === 'commit-message/format',
     ),
   ).toBe(true);
   expect(
-    validateCommitMessage('fp - feat safe array guards').some(
+    validateCommitMessage('fp: add safe array guards').some(
       (item) => item.rule === 'commit-message/format',
     ),
+  ).toBe(true);
+  expect(
+    validateCommitMessage('fp - ', {}).some((item) => item.rule === 'commit-message/format'),
   ).toBe(true);
   expect(
     validateCommitMessage('other - fix a bug', {

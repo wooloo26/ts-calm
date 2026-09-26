@@ -22,16 +22,13 @@ export const validateCommitMessage = (
       ),
     );
   const first = message.split(/\r?\n/)[0] ?? '';
-  const match =
-    /^([a-z][a-z0-9-]*) - (add|fix|update|remove|refactor|test|document|build|optimize|revert|release) (\S.*)$/.exec(
-      first,
-    );
+  const match = /^([a-z][a-z0-9-]*) - (\S.*)$/.exec(first);
   if (!match || first.length > (options.maxLength ?? 100))
     diagnostics.push(
       diagnostic(
         source,
         'commit-message/format',
-        `Expected scope - verb description, at most ${options.maxLength ?? 100} characters.`,
+        `Expected scope - description, at most ${options.maxLength ?? 100} characters.`,
       ),
     );
   else if (options.scopes && !options.scopes.includes(match[1] ?? ''))

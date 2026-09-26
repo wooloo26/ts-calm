@@ -161,7 +161,7 @@ Split by responsibility above 80 effective lines; above 150 is an error. Only th
 
 ## commit-message
 
-Use scope - verb description, ASCII throughout, with a subject no longer than 100 characters.
+Use scope - description, ASCII throughout, with a subject no longer than 100 characters.
 
 ```ts
 fp - add add safe guards

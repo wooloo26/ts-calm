@@ -96,7 +96,7 @@ export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
   },
   'commit-message': {
     summary:
-      'Use scope - verb description, ASCII throughout, with a subject no longer than 100 characters.',
+      'Use scope - description, ASCII throughout, with a subject no longer than 100 characters.',
     example: 'fp - add add safe guards',
   },
 };

@@ -28,7 +28,7 @@ toolchain. Node 24+, ESM, MIT. Nothing is published — copy the repository and 
 | `pnpm test` / `pnpm test:coverage`   | vitest over `packages/*/tests` and coverage thresholds |
 | `pnpm bench`                         | vitest benchmarks                                      |
 | `pnpm docs`                          | regenerate `docs/rules.md` from the rule help          |
-| `pnpm commit-message --file <path>`  | check `scope - verb description`                       |
+| `pnpm commit-message --file <path>`  | check `scope - description`                            |
 
 `packages/check` owns the `ts-calm` binary: `check [--staged]`, `typecheck`, `init`, `explain <rule>`
 and `commit-message --file <path>`, each accepting `--json` and `--cwd <directory>`. Exit codes:

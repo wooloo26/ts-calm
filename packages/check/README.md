@@ -12,7 +12,7 @@ compiler configuration of its own.
 | `typecheck`                    | The pinned compiler over the project's own `tsconfig.json`     |
 | `init`                         | Add a missing ESM `type` without overwriting existing choices  |
 | `explain <rule>`               | Explain a rule and its functional alternative                  |
-| `commit-message --file <path>` | Check `scope - verb description`, e.g. `fp - add safe guards`  |
+| `commit-message --file <path>` | Check `scope - description`, e.g. `fp - add safe guards`       |
 
 Every command accepts `--cwd <directory>` and `--json`. Exit codes: 0 passed, 1 error-severity
 violation, 2 execution or configuration error. The rules are listed in
