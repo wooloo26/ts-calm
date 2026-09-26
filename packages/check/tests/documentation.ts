@@ -6,7 +6,7 @@ import { parseSync } from 'oxc-parser';
 import { isArray, isPlainObject } from '@ts-calm/fp';
 import { renderRuleGuide } from '#src/rule-help';
 
-const packages = ['@ts-calm/fp', '@ts-calm/check', '@ts-calm/create-template'] as const;
+const packages = ['@ts-calm/fp', '@ts-calm/check'] as const;
 const load = createRequire(import.meta.url);
 
 type Node = Readonly<Record<string, unknown>>;

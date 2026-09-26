@@ -50,7 +50,7 @@ describe('configuration discovery', () => {
   it('exposes this repository configuration to the commit policy', () => {
     const configuration = loadConfiguration(repository);
     expect(configuration.rules?.['commit-message']).toMatchObject({
-      scopes: expect.arrayContaining(['root', 'fp', 'check', 'template']),
+      scopes: expect.arrayContaining(['root', 'fp', 'check', 'docs', 'build']),
     });
     expect(configuration.effectImports).toEqual(['oxc-resolver']);
   });

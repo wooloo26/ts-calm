@@ -16,7 +16,7 @@ import { formatDiagnostics } from '#src/diagnostics';
 import type { Diagnostic } from '#src/types';
 
 const usage =
-  'ts-calm check [--staged] [--json] [--cwd <directory>]\nts-calm typecheck [--json] [--cwd <directory>]\nts-calm init [--template pnpm-turbo] [--json] [--cwd <directory>]\nts-calm explain <rule> [--json]\nts-calm commit-message --file <path> [--json] [--cwd <directory>]';
+  'ts-calm check [--staged] [--json] [--cwd <directory>]\nts-calm typecheck [--json] [--cwd <directory>]\nts-calm init [--json] [--cwd <directory>]\nts-calm explain <rule> [--json]\nts-calm commit-message --file <path> [--json] [--cwd <directory>]';
 /** @impure Read CLI arguments, execute commands and write output or exit status. */
 const main = async (): Promise<void> => {
   const args = process.argv.slice(2);
@@ -40,29 +40,20 @@ const main = async (): Promise<void> => {
   let root = process.cwd(),
     file = '',
     staged = false,
-    json = false,
-    template = '';
+    json = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--json') json = true;
     else if (argument === '--staged' && command === 'check') staged = true;
-    else if (
-      argument === '--cwd' ||
-      (argument === '--file' && command === 'commit-message') ||
-      (argument === '--template' && command === 'init')
-    ) {
+    else if (argument === '--cwd' || (argument === '--file' && command === 'commit-message')) {
       const value = args[++index];
       if (!value || value.startsWith('--')) throw new Error(`Missing value for ${argument}.`);
       if (argument === '--cwd') root = resolve(value);
-      else if (argument === '--template') template = value;
       else file = value;
     } else throw new Error(`Unknown argument ${argument}.\n${usage}`);
   }
   if (command === 'init') {
-    if (template && template !== 'pnpm-turbo') throw new Error(`Unknown template ${template}.`);
-    const result = template
-      ? await (await import('@ts-calm/create-template')).initializeWorkspace(root)
-      : await (await import('#src/init.b')).initializeProject(root);
+    const result = await (await import('#src/init.b')).initializeProject(root);
     console.log(
       json
         ? JSON.stringify(result)

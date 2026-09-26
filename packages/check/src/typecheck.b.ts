@@ -75,9 +75,7 @@ const typeDiagnostics = (
 export const typecheckProject = (root: string): readonly Diagnostic[] => {
   const config = join(root, 'tsconfig.json');
   if (!existsSync(config))
-    throw new Error(
-      'tsconfig.json is missing. Provide a project configuration, or generate a workspace with @ts-calm/create-template.',
-    );
+    throw new Error('tsconfig.json is missing. Provide a project configuration for typecheck.');
   const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-types-'));
   try {
     const output = execute(root, binary('typescript', 'bin/tsc'), [

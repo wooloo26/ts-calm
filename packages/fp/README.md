@@ -6,13 +6,10 @@ external-value guards and explicit serialization. Node 24+, ESM, MIT.
 This package is the runtime. It has no runtime dependencies and `@types/node` is development-only,
 so importing it never loads a formatter, linter or compiler.
 
-## Install
-
-```sh
-pnpm add @ts-calm/fp
-```
-
 ## Use
+
+This package lives at `packages/fp` in the template, and `pnpm install` links it as `@ts-calm/fp`;
+there is nothing to add.
 
 ```ts
 import { err, getOrElse, isArray, isNumber, match, ok, fromNullable } from '@ts-calm/fp';

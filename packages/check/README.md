@@ -9,17 +9,20 @@ the source rules, and `typecheck` runs this pinned compiler instead of whatever 
 to have. It carries no formatter, linter or compiler configuration; those belong to the project's
 own toolchain.
 
-## Install
+## Use
+
+This package lives at `packages/check` in the template, and `pnpm install` links it as
+`@ts-calm/check`; there is nothing to add.
 
 ```sh
-pnpm add -D @ts-calm/check
+pnpm install
 pnpm exec ts-calm init
 pnpm exec ts-calm typecheck
 pnpm exec ts-calm check
 ```
 
 `init` only adds a missing ESM `type` to `package.json`. A project provides its own `tsconfig.json`
-for `typecheck`; `@ts-calm/create-template` generates a workspace that already has one.
+for `typecheck`; this workspace ships one at the root.
 
 ## Commands
 
@@ -28,7 +31,6 @@ for `typecheck`; `@ts-calm/create-template` generates a workspace that already h
 | `check` / `check --staged`     | The source rules, on the working tree or on a frozen Git index |
 | `typecheck`                    | The pinned compiler over the project's own `tsconfig.json`     |
 | `init`                         | Add a missing ESM `type` without overwriting existing choices  |
-| `init --template pnpm-turbo`   | Generate a workspace with `@ts-calm/create-template`           |
 | `explain <rule>`               | Explain a rule and its functional alternative                  |
 | `commit-message --file <path>` | Check `scope - verb description`, e.g. `fp - add safe guards`  |
 
@@ -37,7 +39,7 @@ violation, 2 execution or configuration errors. Warnings are reported without fa
 
 `check` reports only the rules this tool owns. Formatting, linting and the compiler configuration
 stay with the project's own toolchain: a project runs its formatter and linter binaries directly,
-and `@ts-calm/create-template` renders a workspace that wires both up around `ts-calm check`.
+and this workspace's root scripts wire both up around `ts-calm check`.
 
 ## API
 

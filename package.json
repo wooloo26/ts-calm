@@ -2,7 +2,7 @@
   "name": "@ts-calm/workspace",
   "version": "0.0.0",
   "private": true,
-  "description": "Development workspace for the @ts-calm packages: functional runtime, check tool and workspace template.",
+  "description": "Private template workspace for TypeScript projects: functional runtime, check tool and the project's own toolchain.",
   "homepage": "https://github.com/wooloo26/ts-calm#readme",
   "bugs": "https://github.com/wooloo26/ts-calm/issues",
   "license": "MIT",
@@ -24,8 +24,6 @@
     "check": "node --conditions=source packages/check/src/cli.b.ts check",
     "commit-message": "node --conditions=source packages/check/src/cli.b.ts commit-message",
     "docs": "node --conditions=source packages/check/scripts/docs.ts",
-    "test:package": "node --conditions=source packages/check/scripts/package-test.ts",
-    "test:template": "node --conditions=source packages/create-template/scripts/workspace-smoke.ts",
     "verify": "pnpm build && pnpm typecheck && pnpm check && pnpm lint && pnpm fmt:check && pnpm test"
   },
   "devDependencies": {
