@@ -15,6 +15,13 @@ export type Value =
   | Readonly<{ kind: 'function'; id: string }>
   | Readonly<{ kind: 'external'; name: string }>
   | Readonly<{ kind: 'reference'; id: string; path: readonly string[]; shape: string }>
+  | Readonly<{
+      kind: 'container';
+      variant: 'ok' | 'err' | 'some' | 'none';
+      payload: readonly Value[];
+    }>
+  | Readonly<{ kind: 'decoder'; callbacks: readonly Value[] }>
+  | Readonly<{ kind: 'decoder-call'; callbacks: readonly Value[] }>
   | FreshValue;
 export type Frame = Readonly<{
   fn: FunctionModel;
@@ -72,14 +79,20 @@ export type Project = Readonly<{
   declared: ReadonlySet<string>;
 }>;
 export const unknown: Value = { kind: 'unknown' };
-export const valueKey = (value: Value): string =>
-  value.kind === 'reference'
-    ? `${value.id}.${value.path.join('.')}`
-    : value.kind === 'function' || value.kind === 'fresh'
-      ? value.id
-      : value.kind === 'external'
-        ? value.name
-        : `?${value.shape ?? ''}`;
+export const valueKey = (value: Value, depth = 0): string =>
+  depth > 8
+    ? '?'
+    : value.kind === 'container'
+      ? `${value.variant}(${value.payload.map((item) => valueKey(item, depth + 1)).join(',')})`
+      : value.kind === 'decoder' || value.kind === 'decoder-call'
+        ? `${value.kind}(${value.callbacks.map((item) => valueKey(item, depth + 1)).join(',')})`
+        : value.kind === 'reference'
+          ? `${value.id}.${value.path.join('.')}`
+          : value.kind === 'function' || value.kind === 'fresh'
+            ? value.id
+            : value.kind === 'external'
+              ? value.name
+              : `?${value.shape ?? ''}`;
 export const unique = (values: readonly Value[]): readonly Value[] => {
   if (values.length < 2) return values;
   const seen = new Map<string, Value>();
@@ -128,6 +141,20 @@ export const referenceShape = (
 ): string => {
   let current = expand(binding.annotation, model, { project });
   for (const key of path) {
+    const typeName = record(current.node['typeName']);
+    const name = text(typeName, 'name') || text(record(typeName['right']), 'name');
+    const local = text(record(typeName['left']), 'name') || name;
+    const imported = current.model.importsByName.get(local);
+    if (
+      imported?.specifier === '@ts-calm/fp' &&
+      ['Result', 'AsyncResult', 'Option', 'Ok', 'Err', 'Some'].includes(name) &&
+      (key === 'value' || key === 'error')
+    ) {
+      const argumentsNode = record(current.node['typeArguments'] ?? current.node['typeParameters']);
+      const index = key === 'error' && name !== 'Err' ? 1 : 0;
+      current = expand(children(argumentsNode)[index]?.node ?? {}, current.model, { project });
+      continue;
+    }
     if (typeKind(current.node) === 'array' && (key === '*' || /^\d+$/.test(key))) {
       const argumentsNode = record(current.node['typeArguments'] ?? current.node['typeParameters']);
       const element = record(current.node['elementType'] ?? children(argumentsNode)[0]?.node);
@@ -143,6 +170,8 @@ export const referenceShape = (
 };
 
 export const property = (value: Value, key: string, project: Project): readonly Value[] => {
+  if (value.kind === 'decoder' && key === 'parse')
+    return [{ kind: 'decoder-call', callbacks: value.callbacks }];
   if (value.kind === 'external')
     return [
       { kind: 'external', name: `${value.name}${value.name.endsWith(':') ? '' : '.'}${key}` },

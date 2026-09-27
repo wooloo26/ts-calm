@@ -1,5 +1,5 @@
 /**
- * @boundary Execute the pinned compiler against the selected project and normalize its report.
+ * @boundary Run the pinned compiler and remove its temporary cache, retaining both failure outcomes.
  * @effects node:child_process
  * @effects node:fs
  * @effects node:module
@@ -11,91 +11,94 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { completeWithCleanup, err, get, isErr, ok } from '@ts-calm/fp';
+import type { Result } from '@ts-calm/fp';
+import { capture } from '@ts-calm/fp/boundary';
+import { typeDiagnostics } from '#src/compiler';
+import { issue } from '#src/core/issues';
+import type { CheckFailure } from '#src/core/issues';
 import type { Diagnostic } from '#src/core/types';
 
-const load = createRequire(import.meta.url);
-/** @impure Resolve the pinned compiler in the installed dependency graph. */
-const binary = (name: string, path: string): string =>
-  join(dirname(load.resolve(`${name}/package.json`)), path);
-const fileName = (root: string, file: string): string =>
-  (isAbsolute(file) ? relative(root, file) : file).replaceAll('\\', '/');
+/** @impure Invoke the pinned compiler with a private build cache. */
+const execute = (root: string, cache: string): Result<readonly Diagnostic[], CheckFailure> => {
+  const invoked = capture(
+    () => {
+      const load = createRequire(import.meta.url);
+      const binary = join(dirname(load.resolve('typescript/package.json')), 'bin/tsc');
+      return spawnSync(
+        process.execPath,
+        [
+          binary,
+          '--project',
+          resolve(root, 'tsconfig.json'),
+          '--noEmit',
+          '--pretty',
+          'false',
+          '--incremental',
+          '--tsBuildInfoFile',
+          join(cache, 'check.tsbuildinfo'),
+        ],
+        {
+          cwd: root,
+          encoding: 'utf8',
+          windowsHide: true,
+          maxBuffer: 32 * 1024 * 1024,
+          env: process.env,
+        },
+      );
+    },
+    { name: 'execute-typescript' },
+  );
+  if (isErr(invoked)) return invoked;
+  const result = get(invoked);
+  if (result.error)
+    return err(
+      issue(
+        'command-failed',
+        'execute-typescript',
+        `Cannot start TypeScript: ${result.error.message}`,
+      ),
+    );
+  if (result.signal)
+    return err(
+      issue('command-failed', 'execute-typescript', `Compiler terminated by ${result.signal}.`),
+    );
+  const diagnostics = typeDiagnostics(result.stdout, (file) =>
+    (isAbsolute(file) ? relative(root, file) : file).replaceAll('\\', '/'),
+  );
+  return result.status !== 0 && diagnostics.length === 0
+    ? err(
+        issue(
+          'command-failed',
+          'execute-typescript',
+          result.stderr || result.stdout || 'TypeScript failed.',
+        ),
+      )
+    : ok(diagnostics);
+};
 
-/** @impure Run the compiler with the current host environment. */
-const execute = (root: string, executable: string, args: readonly string[]) => {
-  const result = spawnSync(process.execPath, [executable, ...args], {
-    cwd: root,
-    encoding: 'utf8',
-    windowsHide: true,
-    maxBuffer: 32 * 1024 * 1024,
-    env: process.env,
+/** @impure Execute the compiler and release this invocation's cache even after failure. */
+export const typecheckProject = (root: string): Result<readonly Diagnostic[], CheckFailure> => {
+  const exists = capture(() => existsSync(join(root, 'tsconfig.json')), {
+    name: 'find-typescript-configuration',
   });
-  // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-  if (result.error) throw new Error(`Cannot start ${executable}: ${result.error.message}`);
-  // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-  if (result.signal) throw new Error(`Compiler terminated by ${result.signal}.`);
-  return { status: result.status ?? 2, stdout: result.stdout, stderr: result.stderr };
-};
-
-const typeDiagnostics = (
-  output: string,
-  normalize: (file: string) => string,
-): readonly Diagnostic[] => {
-  const diagnostics: Diagnostic[] = [];
-  for (const line of output.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    const match = /^(.*?)\((\d+),(\d+)\): (error|warning) TS(\d+): (.*)$/.exec(line);
-    const global = /^(error|warning) TS(\d+): (.*)$/.exec(line);
-    if (match)
-      diagnostics.push({
-        rule: `typecheck/TS${match[5]}`,
-        file: normalize(match[1] ?? ''),
-        line: Number(match[2]),
-        column: Number(match[3]),
-        severity: match[4] === 'warning' ? 'warning' : 'error',
-        message: match[6] ?? '',
-      });
-    else if (global)
-      diagnostics.push({
-        rule: `typecheck/TS${global[2]}`,
-        file: 'tsconfig.json',
-        line: 1,
-        column: 1,
-        severity: global[1] === 'warning' ? 'warning' : 'error',
-        message: global[3] ?? '',
-      });
-    else if (diagnostics.length > 0) {
-      const previous = diagnostics.pop();
-      if (previous) diagnostics.push({ ...previous, message: `${previous.message}\n${line}` });
-    }
-  }
-  return diagnostics;
-};
-
-/** @impure Execute the compiler with an owned temporary build cache. */
-export const typecheckProject = (root: string): readonly Diagnostic[] => {
-  const config = join(root, 'tsconfig.json');
-  if (!existsSync(config))
-    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-    throw new Error('tsconfig.json is missing. Provide a project configuration for typecheck.');
-  const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-types-'));
-  // @allow strict-fp/no-try -- Preserve unconditional cleanup and exception precedence required by this boundary API.
-  try {
-    const output = execute(root, binary('typescript', 'bin/tsc'), [
-      '--project',
-      resolve(config),
-      '--noEmit',
-      '--pretty',
-      'false',
-      '--incremental',
-      '--tsBuildInfoFile',
-      join(temporary, 'check.tsbuildinfo'),
-    ]);
-    const diagnostics = typeDiagnostics(output.stdout, (file) => fileName(root, file));
-    if (output.status !== 0 && diagnostics.length === 0)
-      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-      throw new Error(output.stderr || output.stdout || 'TypeScript failed.');
-    return diagnostics;
-  } finally {
-    rmSync(temporary, { recursive: true, force: true });
-  }
+  if (isErr(exists)) return exists;
+  if (!get(exists))
+    return err(
+      issue(
+        'invalid-config',
+        'typecheck',
+        'tsconfig.json is missing. Provide a project configuration for typecheck.',
+      ),
+    );
+  const temporary = capture(() => mkdtempSync(join(tmpdir(), 'ts-calm-types-')), {
+    name: 'create-compiler-cache',
+  });
+  if (isErr(temporary)) return temporary;
+  const directory = get(temporary);
+  const result = execute(root, directory);
+  const cleaned = capture(() => rmSync(directory, { recursive: true, force: true }), {
+    name: 'remove-compiler-cache',
+  });
+  return completeWithCleanup(result, [cleaned]);
 };

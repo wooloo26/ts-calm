@@ -1,3 +1,4 @@
+import { failureText } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { analyzeSources, runChecks, validateConfiguration } from '@ts-calm/check';
 import type { CheckConfig } from '@ts-calm/check';
@@ -231,6 +232,6 @@ describe('configuration and commits', () => {
       { rules: { 'function-length': { warning: 200, maximum: 150 } } },
       { overrides: [{ files: ['**'], rules: { 'no-file-cycles': false } }] },
     ])
-      expect(() => validateConfiguration(input)).toThrow();
+      expect(failureText(validateConfiguration(input))).not.toBe('');
   });
 });

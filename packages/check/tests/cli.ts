@@ -1,3 +1,4 @@
+import { success } from '#tests/fixtures/result';
 import { afterEach, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { checkStaged, checkSourceProject } from '@ts-calm/check';
@@ -87,13 +88,13 @@ it('honors staged line allowances while reporting an unallowed working-tree occu
     '/** @boundary Match the vendor callback signature. */\n// @allow function-params -- Vendor requires four arguments.\nexport const f=(a:number,b:number,c:number,d:number)=>[a,b,c,d];';
   await withProject({ ...base, 'src/adapter.b.ts': adapter }, async (root) => {
     initializeGit(root);
-    expect(await checkStaged(root)).toEqual([]);
+    expect(success(await checkStaged(root))).toEqual([]);
     write(
       root,
       'src/adapter.b.ts',
       adapter + '\nexport const g=(a:number,b:number,c:number,d:number)=>[a,b,c,d];',
     );
-    expect((await checkSourceProject(root)).map((issue) => issue.rule)).toContain(
+    expect(success(await checkSourceProject(root)).map((issue) => issue.rule)).toContain(
       'function-params',
     );
     expect((await run(['check', '--staged', '--cwd', root, '--json'])).code).toBe(0);
@@ -109,8 +110,6 @@ it.each([new Error('external failure'), 'non-error failure'])(
     vi.doMock('#src/project', () => ({ checkProject: async () => Promise.reject(failure) }));
     const result = await run(['check']);
     expect(result.code).toBe(2);
-    expect(result.errors).toBe(
-      failure instanceof Error ? failure.message : 'Check execution failed.',
-    );
+    expect(result.errors).toBe(failure instanceof Error ? failure.message : failure);
   },
 );

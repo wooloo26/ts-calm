@@ -9,7 +9,7 @@ export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
   'function-params': functionParamsHelp,
   purity: {
     summary:
-      'Production functions follow a pure-by-default convention. Declare known I/O, time, randomness or external state effects with a leading @impure reason. Local construction and loops are allowed; project calls propagate known effects, while private temporary mutations stay local. Higher-order helpers depend on their callbacks. This bounded analysis does not prove unknown third-party calls, getters, proxies, dynamic dispatch or recursive allocation factories pure. Each root function has a budget of 512 context expansions; purity/incomplete warns when calls remain unvisited. The annotation never bypasses boundary or other checks.',
+      'Declare I/O, time, randomness and shared-state effects with a leading @impure reason. Local mutation and loops are allowed; project calls and known fp callbacks propagate effects. Each root has 512 context expansions; purity/incomplete means some calls remain unproven. Unknown third-party behavior, getters, proxies, dynamic dispatch and recursive allocation factories are not proven pure. An annotation does not bypass other checks.',
     example:
       '/** @impure Read the system clock. */\nexport const now = () => Date.now();\n// Direct host operations also require a documented .b.ts boundary.',
   },
@@ -91,7 +91,7 @@ export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
   },
   boundary: {
     summary:
-      'Only direct effects or concrete adaptation justify .b.ts. Explain the guarantee with a leading @boundary and declare actual @effects. Use fp helpers first. A necessary @allow must be a standalone line comment immediately above its target diagnostic line, with an exact strict-fp check or function-params and a reason. Consecutive directives share the next code line. File-header, trailing and wildcard allowances are rejected. See docs/allow.md for the permitted cases and migration examples.',
+      'Keep direct host effects and necessary external adaptation in .b.ts. Declare @boundary and actual @effects in the header. Prefer fp helpers; line-level @allow syntax and necessary exceptions are documented in docs/allow.md.',
     example:
       '/**\n * @boundary Read configuration as an explicit Result.\n * @effects node:fs/promises\n */',
   },
@@ -104,7 +104,7 @@ export const ruleHelpEntries: Readonly<Record<string, RuleHelp>> = {
   'commit-message': {
     summary:
       'Use scope - description, ASCII throughout, with a subject no longer than 100 characters.',
-    example: 'fp - add add safe guards',
+    example: 'fp - add safe guards',
   },
 };
 

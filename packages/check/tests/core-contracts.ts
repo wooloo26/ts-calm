@@ -1,3 +1,4 @@
+import { failureText, success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { analyzeSources, runChecks, validateConfiguration } from '@ts-calm/check';
 import { matches, selected, enabled } from '#src/core/configuration';
@@ -55,7 +56,7 @@ describe('configuration and diagnostics', () => {
     { overrides: {} },
     { overrides: [{ files: ['**'], rules: { 'no-file-cycles': false } }] },
   ])('rejects invalid configuration %j', (value) =>
-    expect(() => validateConfiguration(value)).toThrow(),
+    expect(failureText(validateConfiguration(value))).not.toBe(''),
   );
   it('accepts all supported option families', () => {
     const config = {
@@ -69,7 +70,7 @@ describe('configuration and diagnostics', () => {
         'commit-message': { scopes: ['check'], ascii: false, maxLength: 70 },
       },
     };
-    expect(validateConfiguration(config)).toEqual(config);
+    expect(success(validateConfiguration(config))).toEqual(config);
   });
   it('formats positions, severity and multiline help deterministically', () => {
     const source = { path: 'a.ts', content: 'first\nsecond' };

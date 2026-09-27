@@ -241,6 +241,53 @@ const registerType = (model: PurityModel, node: Node): void => {
     model.typeDefs.set(text(record(node['id']), 'name'), record(node['body']));
 };
 
+/** @impure Register one function and populate its parameter and body scopes. */
+const walkFunction = (
+  model: PurityModel,
+  node: Node,
+  { scope, parent, anchor }: Readonly<{ scope: Scope; parent: Node; anchor: number }>,
+): void => {
+  const id = `${model.file.source.path}:${offset(node)}`;
+  const name =
+    text(record(node['id']), 'name') ||
+    text(record(parent['id']), 'name') ||
+    text(record(parent['key']), 'name');
+  const fn: FunctionModel = {
+    id,
+    file: model.file.source.path,
+    name,
+    parent: scope.owner,
+    start: offset(node),
+    end: offset(node, 'end'),
+    anchor,
+    node,
+    body: record(node['body']),
+    params: [],
+    inline:
+      parent['type'] === 'CallExpression' ||
+      parent['type'] === 'NewExpression' ||
+      parent['type'] === 'AssignmentPattern',
+    captures: [],
+    ...annotation(model.file, anchor),
+  };
+  model.functions.set(id, fn);
+  model.functionNodes.set(offset(node), id);
+  const child: Scope = { owner: id, parent: scope, names: new Map() };
+  members(node['params']).forEach((param, index) => {
+    const ids = declare(model, child, {
+      pattern: param,
+      value: {},
+      mutable: false,
+      parameter: true,
+    });
+    for (const binding of ids)
+      fn.params.push({ binding, index, path: model.bindings.get(binding)?.projection ?? [] });
+  });
+  for (const param of members(node['params']))
+    walkModel(model, param, { scope: child, parent: node, anchor: offset(param) });
+  walkModel(model, fn.body, { scope: child, parent: node, anchor: offset(fn.body) });
+};
+
 /** @impure Populate this invocation's lexical model maps and builder records. */
 const walkModel = (
   model: PurityModel,
@@ -251,45 +298,7 @@ const walkModel = (
   model.nodeOwners.set(offset(node), scope.owner);
   registerType(model, node);
   if (functionNode(node) && Object.keys(record(node['body'])).length) {
-    const id = `${model.file.source.path}:${offset(node)}`;
-    const name =
-      text(record(node['id']), 'name') ||
-      text(record(parent['id']), 'name') ||
-      text(record(parent['key']), 'name');
-    const fn: FunctionModel = {
-      id,
-      file: model.file.source.path,
-      name,
-      parent: scope.owner,
-      start: offset(node),
-      end: offset(node, 'end'),
-      anchor,
-      node,
-      body: record(node['body']),
-      params: [],
-      inline:
-        parent['type'] === 'CallExpression' ||
-        parent['type'] === 'NewExpression' ||
-        parent['type'] === 'AssignmentPattern',
-      captures: [],
-      ...annotation(model.file, anchor),
-    };
-    model.functions.set(id, fn);
-    model.functionNodes.set(offset(node), id);
-    const child: Scope = { owner: id, parent: scope, names: new Map() };
-    members(node['params']).forEach((param, index) => {
-      const ids = declare(model, child, {
-        pattern: param,
-        value: {},
-        mutable: false,
-        parameter: true,
-      });
-      for (const binding of ids)
-        fn.params.push({ binding, index, path: model.bindings.get(binding)?.projection ?? [] });
-    });
-    for (const param of members(node['params']))
-      walkModel(model, param, { scope: child, parent: node, anchor: offset(param) });
-    walkModel(model, fn.body, { scope: child, parent: node, anchor: offset(fn.body) });
+    walkFunction(model, node, { scope, parent, anchor });
     return;
   }
   let current = scope;

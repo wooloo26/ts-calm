@@ -1,3 +1,4 @@
+import { failureText, success } from '#tests/fixtures/result';
 import { expect, it } from 'vitest';
 import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,10 +33,10 @@ it.each([true, false])('uses staged workspace policy when strict=%s', async (str
     initializeGit(root);
     const before = git(root, 'ls-files', '--stage', '-z');
     write(root, 'packages/policy/index.ts', policy(!strict));
-    const issues = await checkStaged(root);
+    const issues = success(await checkStaged(root));
     expect(issues.some((issue) => issue.rule === 'strict-fp/no-null')).toBe(strict);
     expect(
-      await checkStagedMessage(root, `${strict ? 'strict' : 'loose'} - validate policy`),
+      success(await checkStagedMessage(root, `${strict ? 'strict' : 'loose'} - validate policy`)),
     ).toEqual([]);
     expect(git(root, 'ls-files', '--stage', '-z')).toBe(before);
   });
@@ -46,7 +47,7 @@ it('does not fall back to a workspace package absent from the index', async () =
     install(root);
     initializeGit(root);
     git(root, 'rm', '--cached', '-r', 'packages/policy');
-    await expect(checkStaged(root)).rejects.toThrow(/snapshot|staged/i);
+    expect(failureText(await checkStaged(root))).toMatch(/snapshot|staged/i);
   });
 });
 
@@ -55,7 +56,7 @@ it('does not read an unstaged workspace export target', async () => {
     install(root);
     initializeGit(root);
     git(root, 'rm', '--cached', 'packages/policy/index.ts');
-    await expect(checkStaged(root)).rejects.toThrow();
+    expect(failureText(await checkStaged(root))).not.toBe('');
   });
 });
 
@@ -66,8 +67,21 @@ it('uses staged package bytes even when the working tree package was removed', a
     const target = join(root, 'packages/policy');
     expect(target.startsWith(root)).toBe(true);
     rmSync(target, { recursive: true });
-    expect((await checkStaged(root)).some((issue) => issue.rule === 'strict-fp/no-null')).toBe(
-      true,
-    );
+    expect(
+      success(await checkStaged(root)).some((issue) => issue.rule === 'strict-fp/no-null'),
+    ).toBe(true);
   });
+});
+
+it('reports a broken external dependency instead of creating a dangling snapshot link', async () => {
+  await withProject(
+    { '.gitignore': 'node_modules/\n', 'src/a.ts': 'export const a=1;' },
+    async (root) => {
+      const store = join(root, 'node_modules/.store/missing');
+      mkdirSync(join(root, 'node_modules'), { recursive: true });
+      symlinkSync(store, join(root, 'node_modules/missing'), 'junction');
+      initializeGit(root);
+      expect(failureText(await checkStaged(root))).not.toBe('');
+    },
+  );
 });

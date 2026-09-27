@@ -5,38 +5,42 @@
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { capture } from '@ts-calm/fp/boundary';
-import { getError, isErr } from '@ts-calm/fp';
+import { capture, captureResult } from '@ts-calm/fp/boundary';
+import { get, getError, isErr, ok } from '@ts-calm/fp';
+import type { Result } from '@ts-calm/fp';
+import type { CheckFailure } from '#src/core/issues';
+import { decodeManifest } from '#src/manifest';
 import { ResolverFactory } from 'oxc-resolver';
 import { classifyTarget } from '#src/resolution';
 import { compilerConditions } from '#src/compiler-options.b';
 import type { AnalyzedFile, ResolvedImport } from '#src/core/types';
 
-/** @impure Read package metadata from disk. */
-const packageName = (path: string): string => {
-  const data: unknown = JSON.parse(readFileSync(path, 'utf8'));
-  if (typeof data === 'object' && data && 'name' in data && typeof data.name === 'string')
-    return data.name;
-  return '';
-};
-
-/** @impure Read workspace package metadata. */
+/** @impure Read workspace manifests for import resolution. */
 const packageAliases = (
   root: string,
   files: readonly string[],
-): Readonly<{ aliases: Record<string, string[]>; directories: readonly string[] }> => {
-  const aliases: Record<string, string[]> = {};
-  const directories: string[] = [];
-  const limit = resolve(root);
-  for (const path of files.filter((file) => /(?:^|\/)package\.json$/.test(file))) {
-    const name = packageName(join(root, path));
-    const directory = dirname(join(root, path));
-    const absolute = resolve(directory);
-    if (absolute !== limit) directories.push(absolute);
-    if (name) aliases[name] = [directory];
-  }
-  return { aliases, directories };
-};
+): Result<
+  Readonly<{ aliases: Record<string, string[]>; directories: readonly string[] }>,
+  CheckFailure
+> =>
+  captureResult(
+    () => {
+      const aliases: Record<string, string[]> = {},
+        directories: string[] = [];
+      const limit = resolve(root);
+      for (const path of files.filter((file) => /(?:^|\/)package\.json$/.test(file))) {
+        const manifest = decodeManifest(readFileSync(join(root, path), 'utf8'));
+        if (isErr(manifest)) return manifest;
+        const name = get(manifest)['name'],
+          directory = dirname(join(root, path)),
+          absolute = resolve(directory);
+        if (absolute !== limit) directories.push(absolute);
+        if (typeof name === 'string' && name) aliases[name] = [directory];
+      }
+      return ok({ aliases, directories });
+    },
+    { name: 'read-workspace-manifests' },
+  );
 
 /**
  * Create the native resolver, optionally applying the project's own custom conditions.
@@ -66,14 +70,19 @@ export const resolveImports = (
   root: string,
   analyzed: readonly AnalyzedFile[],
   allPaths: readonly string[],
-): readonly ResolvedImport[] => {
+): Result<readonly ResolvedImport[], CheckFailure> => {
   const owned = new Set(analyzed.map((file) => file.source.path));
-  const { aliases, directories } = packageAliases(root, allPaths);
+  const metadata = packageAliases(root, allPaths);
+  if (isErr(metadata)) return metadata;
+  const { aliases, directories } = get(metadata);
   const result: ResolvedImport[] = [];
   const conditionCache = new Map<string, readonly string[]>();
   const resolverCache = new Map<string, ResolverFactory>();
   for (const { source, parsed } of analyzed)
     for (const imported of parsed.imports) {
+      const configured = compilerConditions(root, source.path, conditionCache);
+      if (isErr(configured)) return configured;
+      const conditions = get(configured);
       const captured = capture(
         () => {
           const owner = Object.keys(aliases).find(
@@ -82,7 +91,6 @@ export const resolveImports = (
           const origin = owner
             ? join(aliases[owner]?.[0] ?? root, 'package.json')
             : resolve(root, source.path);
-          const conditions = compilerConditions(root, source.path, conditionCache);
           const key = `${imported.typeOnly}:${conditions.join(',')}`;
           let selectedResolver = resolverCache.get(key);
           if (!selectedResolver) {
@@ -130,16 +138,16 @@ export const resolveImports = (
         { name: 'resolve-import' },
       );
       if (isErr(captured)) {
-        const cause = getError(captured).cause;
+        const fault = getError(captured);
         result.push({
           file: source.path,
           imported,
           target: {
             kind: 'error',
-            message: cause instanceof Error ? cause.message : 'Resolver failed.',
+            message: fault.message,
           },
         });
       }
     }
-  return result;
+  return ok(result);
 };

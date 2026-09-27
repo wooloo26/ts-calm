@@ -23,10 +23,13 @@ it('keeps all allowance guide examples typechecked and checked against the actua
   );
   expect(runChecks({ files, imports })).toEqual([]);
   const guide = readFileSync(new URL('../../../docs/allow.md', import.meta.url), 'utf8');
-  for (const match of content
-    .replaceAll('\r\n', '\n')
-    .matchAll(/\/\/ example: \S+\n([\s\S]*?)\/\/ endexample/g))
-    expect(guide).toContain(match[1]?.trim());
+  const displayed = [
+    ...content
+      .replaceAll('\r\n', '\n')
+      .matchAll(/\/\/ example: (protocol|callback)\n([\s\S]*?)\/\/ endexample/g),
+  ];
+  expect(displayed.map((match) => match[1])).toEqual(['protocol', 'callback']);
+  for (const match of displayed) expect(guide).toContain(match[2]?.trim());
 });
 it('preserves protocol payloads and fixed callback arguments', () => {
   expect(protocolEmpty()).toBeNull();

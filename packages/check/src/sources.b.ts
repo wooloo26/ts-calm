@@ -1,19 +1,19 @@
 /**
- * @boundary Read project sources and configuration for checking; propagate filesystem failures to the CLI.
+ * @boundary Enumerate and read project sources, converting filesystem failures at their entry point.
  * @effects node:fs
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyzeSources, runAnalyzedChecks } from '#src/engine';
+import { capture } from '@ts-calm/fp/boundary';
+import type { Result } from '@ts-calm/fp';
 import { excluded, selected } from '#src/core/configuration';
-import { loadConfiguration } from '#src/config-reader.b';
-import { resolveImports } from '#src/resolver.b';
-import type { Diagnostic, CheckConfig, SourceFile } from '#src/core/types';
+import type { CheckConfig, SourceFile } from '#src/core/types';
+import type { CheckFailure } from '#src/core/issues';
 
-/** @impure Enumerate project files on disk. */
-export const projectPaths = (root: string, config: CheckConfig = {}): readonly string[] => {
+/** @impure Enumerate regular project files on disk. */
+const projectPaths = (root: string, config: CheckConfig): readonly string[] => {
   const paths: string[] = [];
-  /** @impure Enumerate directories and append discovered paths. */
+  /** @impure Read directories and append discovered paths. */
   const visit = (directory: string): void => {
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
       const path = directory ? `${directory}/${entry.name}` : entry.name;
@@ -26,25 +26,18 @@ export const projectPaths = (root: string, config: CheckConfig = {}): readonly s
   return paths.toSorted();
 };
 
-/**
- * Read project sources and resolve their filesystem imports.
- *
- * @impure Reads project files from disk.
- * @param root - Absolute project root.
- * @param configuration - Optional explicit configuration; otherwise `ts-calm.config.ts` is loaded.
- * @returns Every source-rule diagnostic for the selected files.
- */
-export const checkSourceProject = async (
+/** @impure Read the selected sources while preserving all paths for workspace resolution. */
+export const readSources = (
   root: string,
-  configuration?: CheckConfig,
-): Promise<readonly Diagnostic[]> => {
-  const config = configuration ?? loadConfiguration(root);
-  const paths = projectPaths(root, config);
-  const files: SourceFile[] = [];
-  for (const path of paths)
-    if (selected(path, config))
-      files.push({ path, content: readFileSync(join(root, path), 'utf8') });
-  const analyzed = analyzeSources({ files }, config);
-  const imports = resolveImports(root, analyzed, paths);
-  return runAnalyzedChecks(analyzed, config, imports);
-};
+  config: CheckConfig,
+): Result<Readonly<{ files: readonly SourceFile[]; paths: readonly string[] }>, CheckFailure> =>
+  capture(
+    () => {
+      const paths = projectPaths(root, config);
+      const files = paths
+        .filter((path) => selected(path, config))
+        .map((path) => ({ path, content: readFileSync(join(root, path), 'utf8') }));
+      return { files, paths };
+    },
+    { name: 'read-project-sources' },
+  );

@@ -5,29 +5,33 @@
  * @effects node:module
  * @effects process
  */
+import { inside } from '#src/core/paths';
+
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { isArray, isPlainObject } from '@ts-calm/fp';
-
-const isInside = (directory: string, limit: string): boolean => {
-  const path = relative(limit, directory);
-  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
-};
+import { dirname, join, resolve } from 'node:path';
+import { err, get, isErr, ok } from '@ts-calm/fp';
+import type { Result } from '@ts-calm/fp';
+import { capture } from '@ts-calm/fp/boundary';
+import { compilerConditionsFromOutput } from '#src/compiler';
+import { issue } from '#src/core/issues';
+import type { CheckFailure } from '#src/core/issues';
 
 /** @impure Read filesystem configuration and cache the compiler's normalized conditions for this run. */
 export const compilerConditions = (
   root: string,
   file: string,
   cache: Map<string, readonly string[]>,
-): readonly string[] => {
+): Result<readonly string[], CheckFailure> => {
   let directory = dirname(resolve(root, file)),
     config = '';
   const limit = resolve(root);
-  while (isInside(directory, limit)) {
+  while (inside(limit, directory)) {
     const candidate = join(directory, 'tsconfig.json');
-    if (existsSync(candidate)) {
+    const exists = capture(() => existsSync(candidate), { name: 'find-tsconfig' });
+    if (isErr(exists)) return exists;
+    if (get(exists)) {
       config = candidate;
       break;
     }
@@ -35,32 +39,37 @@ export const compilerConditions = (
     if (parent === directory || directory === limit) break;
     directory = parent;
   }
-  if (!config) return [];
+  if (!config) return ok([]);
   const saved = cache.get(config);
-  if (saved) return saved;
-  const load = createRequire(import.meta.url);
-  const binary = join(dirname(load.resolve('typescript/package.json')), 'bin/tsc');
-  const result = spawnSync(process.execPath, [binary, '--showConfig', '--project', config], {
-    cwd: root,
-    encoding: 'utf8',
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-  });
+  if (saved) return ok(saved);
+  const executed = capture(
+    () => {
+      const load = createRequire(import.meta.url);
+      const binary = join(dirname(load.resolve('typescript/package.json')), 'bin/tsc');
+      return spawnSync(process.execPath, [binary, '--showConfig', '--project', config], {
+        cwd: root,
+        encoding: 'utf8',
+        windowsHide: true,
+        maxBuffer: 16 * 1024 * 1024,
+      });
+    },
+    { name: 'read-typescript-configuration' },
+  );
+  if (isErr(executed)) return executed;
+  const result = get(executed);
   if (result.error || result.status !== 0)
-    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-    throw new Error(
-      result.error?.message ||
-        result.stderr ||
-        result.stdout ||
-        'Cannot read TypeScript configuration.',
+    return err(
+      issue(
+        'command-failed',
+        'read-typescript-configuration',
+        result.error?.message ||
+          result.stderr ||
+          result.stdout ||
+          'Cannot read TypeScript configuration.',
+      ),
     );
-  const data: unknown = JSON.parse(result.stdout);
-  const options =
-    isPlainObject(data) && isPlainObject(data['compilerOptions']) ? data['compilerOptions'] : {};
-  const value = options['customConditions'];
-  const conditions = isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
-  cache.set(config, conditions);
+  const conditions = compilerConditionsFromOutput(result.stdout);
+  if (isErr(conditions)) return conditions;
+  cache.set(config, get(conditions));
   return conditions;
 };

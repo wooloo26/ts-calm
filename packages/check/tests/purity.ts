@@ -1,3 +1,4 @@
+import { success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { checkSourceProject, runChecks } from '@ts-calm/check';
 import { withProject } from '#tests/fixtures/project';
@@ -169,10 +170,10 @@ describe('pure by convention', () => {
         'src/run.ts': 'import {clock as read} from "./clock.ts"; export const run=()=>read();',
       },
       async (root) => {
-        const issues = (
+        const issues = success(
           await checkSourceProject(root, {
             rules: { boundary: false, 'strict-fp': false },
-          })
+          }),
         ).filter((issue) => issue.rule.startsWith('purity/'));
         expect(issues).toHaveLength(1);
         expect(issues[0]?.help).toContain('clock');

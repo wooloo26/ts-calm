@@ -1,3 +1,5 @@
+import { ok } from '@ts-calm/fp';
+import { failureText, success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,8 +30,8 @@ describe('staged snapshots', () => {
       write(root, 'src/a.ts', 'export const value=null; import "./absent.ts";');
       const index = git(root, 'ls-files', '--stage', '-z');
       const worktree = readFileSync(join(root, 'src/a.ts'));
-      expect(await inspectStaged(root)).toEqual([]);
-      expect((await checkProject(root)).length).toBeGreaterThan(0);
+      expect(success(await inspectStaged(root))).toEqual([]);
+      expect(success(await checkProject(root)).length).toBeGreaterThan(0);
       expect(git(root, 'ls-files', '--stage', '-z')).toBe(index);
       expect(readFileSync(join(root, 'src/a.ts'))).toEqual(worktree);
     });
@@ -54,7 +56,7 @@ describe('staged snapshots', () => {
       },
       async (root) => {
         initializeGit(root);
-        expect(await inspectStaged(root)).toEqual([]);
+        expect(success(await inspectStaged(root))).toEqual([]);
       },
     );
   });
@@ -68,10 +70,10 @@ describe('staged snapshots', () => {
       async (root) => {
         initializeGit(root);
         write(root, 'ts-calm.config.ts', 'export default {rules:{"strict-fp":true}}');
-        expect(await inspectStaged(root)).toEqual([]);
+        expect(success(await inspectStaged(root))).toEqual([]);
         git(root, 'add', 'ts-calm.config.ts');
         write(root, 'ts-calm.config.ts', 'export default {rules:{"strict-fp":false}}');
-        expect((await inspectStaged(root)).map((issue) => issue.rule)).toContain(
+        expect(success(await inspectStaged(root)).map((issue) => issue.rule)).toContain(
           'strict-fp/no-null',
         );
       },
@@ -89,12 +91,18 @@ describe('staged snapshots', () => {
         git(root, 'commit', '-m', 'root - add initial');
         write(root, 'src/a.ts', 'export {a} from "./b.ts";');
         git(root, 'add', 'src/a.ts');
-        expect((await inspectStaged(root)).map((issue) => issue.rule)).toContain('no-file-cycles');
+        expect(success(await inspectStaged(root)).map((issue) => issue.rule)).toContain(
+          'no-file-cycles',
+        );
         git(root, 'mv', 'src/b.ts', 'src/renamed.ts');
-        expect((await inspectStaged(root)).map((issue) => issue.rule)).toContain('imports/resolve');
+        expect(success(await inspectStaged(root)).map((issue) => issue.rule)).toContain(
+          'imports/resolve',
+        );
         rmSync(join(root, 'src/renamed.ts'));
         git(root, 'add', '-A');
-        expect((await inspectStaged(root)).map((issue) => issue.rule)).toContain('imports/resolve');
+        expect(success(await inspectStaged(root)).map((issue) => issue.rule)).toContain(
+          'imports/resolve',
+        );
       },
     );
   });
@@ -103,18 +111,23 @@ describe('staged snapshots', () => {
       initializeGit(root);
       const object = git(root, 'rev-parse', ':src/a.ts').trim();
       git(root, 'update-index', '--add', '--cacheinfo', `120000,${object},link`);
-      await expect(checkStaged(root)).rejects.toThrow('cannot be inspected as a source snapshot');
+      expect(failureText(await checkStaged(root))).toContain(
+        'cannot be inspected as a source snapshot',
+      );
     });
   });
   it('detects concurrent changes to the index without reverting them', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) => {
       initializeGit(root);
-      await expect(
-        withStagedProject(root, async () => {
-          write(root, 'src/a.ts', 'export const a=2;');
-          git(root, 'add', 'src/a.ts');
-        }),
-      ).rejects.toThrow('Git index changed');
+      expect(
+        failureText(
+          await withStagedProject(root, async () => {
+            write(root, 'src/a.ts', 'export const a=2;');
+            git(root, 'add', 'src/a.ts');
+            return ok();
+          }),
+        ),
+      ).toContain('Git index changed');
       expect(git(root, 'show', ':src/a.ts')).toContain('a=2');
     });
   });
@@ -123,9 +136,9 @@ describe('staged snapshots', () => {
       { 'ts-calm.config.ts': 'export default {rules:{"commit-message":{scopes:["fp"]}}}' },
       async (root) => {
         initializeGit(root);
-        expect(await checkStagedMessage(root, 'fp - fix update')).toEqual([]);
+        expect(success(await checkStagedMessage(root, 'fp - fix update'))).toEqual([]);
         expect(
-          (await checkStagedMessage(root, 'check - fix update')).map((issue) => issue.rule),
+          success(await checkStagedMessage(root, 'check - fix update')).map((issue) => issue.rule),
         ).toContain('commit-message/scope');
       },
     );

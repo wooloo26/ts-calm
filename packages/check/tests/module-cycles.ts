@@ -1,3 +1,4 @@
+import { success } from '#tests/fixtures/result';
 import { expect, it } from 'vitest';
 import { checkSourceProject } from '@ts-calm/check';
 import { withProject } from '#tests/fixtures/project';
@@ -11,13 +12,15 @@ it('finds directory cycles without a file cycle and reports concrete witness loc
       'orders/types.ts': 'export const order=1;',
     },
     async (root) => {
-      const diagnostics = await checkSourceProject(root);
+      const diagnostics = success(await checkSourceProject(root));
       expect(diagnostics.some((item) => item.rule === 'no-file-cycles')).toBe(false);
       const issue = diagnostics.find((item) => item.rule === 'no-module-cycles');
       expect(issue?.message).toContain('orders -> stock -> orders');
       expect(issue?.help).toContain('orders/read.ts:1 -> stock/types.ts');
       expect(issue?.help).toContain('stock/write.ts:1 -> orders/types.ts');
-      expect(await checkSourceProject(root, { rules: { 'no-module-cycles': false } })).toEqual([]);
+      expect(
+        success(await checkSourceProject(root, { rules: { 'no-module-cycles': false } })),
+      ).toEqual([]);
     },
   );
 });
@@ -25,7 +28,7 @@ it('finds directory cycles without a file cycle and reports concrete witness loc
 it('ignores intra-directory edges and treats subdirectories as separate modules', async () => {
   await withProject(
     { 'a/read.ts': 'export {value} from "./value.ts";', 'a/value.ts': 'export const value=1;' },
-    async (root) => expect(await checkSourceProject(root)).toEqual([]),
+    async (root) => expect(success(await checkSourceProject(root))).toEqual([]),
   );
   await withProject(
     {
@@ -35,7 +38,7 @@ it('ignores intra-directory edges and treats subdirectories as separate modules'
       'a/types.ts': 'export const value=1;',
     },
     async (root) =>
-      expect((await checkSourceProject(root)).map((item) => item.rule)).toContain(
+      expect(success(await checkSourceProject(root)).map((item) => item.rule)).toContain(
         'no-module-cycles',
       ),
   );
@@ -50,7 +53,7 @@ it('includes literal dynamic imports and test directories', async () => {
       'tests/b.ts': 'export const two=2;',
     },
     async (root) =>
-      expect((await checkSourceProject(root)).map((item) => item.rule)).toContain(
+      expect(success(await checkSourceProject(root)).map((item) => item.rule)).toContain(
         'no-module-cycles',
       ),
   );

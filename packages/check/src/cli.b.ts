@@ -1,101 +1,87 @@
 #!/usr/bin/env node
 /**
- * @boundary Adapt command-line arguments, files and exit status to the reusable check API.
+ * @boundary Adapt process input and files to Result-based commands, then print one response and exit status.
  * @effects process
  * @effects console
  * @effects node:fs
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { err, get, getError, isErr, map, ok } from '@ts-calm/fp';
+import type { AsyncResult, Unit } from '@ts-calm/fp';
+import { capture, captureResultAsync } from '@ts-calm/fp/boundary';
 import { checkProject } from '#src/project';
-import { explainRule, helpForRule } from '#src/rules/help';
 import { checkStaged, checkStagedMessage } from '#src/staged.b';
-import { formatDiagnostics } from '#src/core/diagnostics';
-import { err, getError, isErr, ok } from '@ts-calm/fp';
-import type { Result, Unit } from '@ts-calm/fp';
-import { captureResultAsync } from '@ts-calm/fp/boundary';
-import type { Diagnostic } from '#src/core/types';
+import { explainRule, helpForRule } from '#src/rules/help';
+import { parseCommand, diagnosticOutput, initializationOutput, usage } from '#src/cli';
+import type { Command, CommandOutput } from '#src/cli';
+import { failureMessage, issue } from '#src/core/issues';
+import type { CheckFailure } from '#src/core/issues';
+import { decodeManifest } from '#src/manifest';
 
-const usage =
-  'ts-calm check [--staged] [--json] [--cwd <directory>]\nts-calm typecheck [--json] [--cwd <directory>]\nts-calm init [--json] [--cwd <directory>]\nts-calm explain <rule> [--json]\nts-calm commit-message --file <path> [--json] [--cwd <directory>]';
-/** @impure Read CLI arguments, execute commands and write output or exit status. */
-const main = async (): Promise<Result<Unit, string>> => {
-  const args = process.argv.slice(2);
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(usage);
-    return ok();
+/** @impure Read files and execute the selected command. */
+const execute = async (command: Command): AsyncResult<CommandOutput, CheckFailure> => {
+  const { root, json, kind } = command;
+  if (kind === 'help') return ok({ text: usage, exitCode: 0 });
+  if (kind === 'version') {
+    const text = capture(() => readFileSync(new URL('../package.json', import.meta.url), 'utf8'), {
+      name: 'read-tool-version',
+    });
+    if (isErr(text)) return text;
+    const manifest = decodeManifest(get(text));
+    return map(manifest, (value) => ({
+      text: typeof value['version'] === 'string' ? value['version'] : '0.0.0',
+      exitCode: 0 as const,
+    }));
   }
-  if (args.length === 1 && args[0] === '--version') {
-    const manifest: unknown = JSON.parse(
-      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  if (kind === 'init')
+    return map(await (await import('#src/init.b')).initializeProject(root), (value) =>
+      initializationOutput(value, json),
     );
-    console.log(
-      typeof manifest === 'object' && manifest && 'version' in manifest
-        ? String(manifest.version)
-        : '0.0.0',
+  if (kind === 'explain') {
+    const help = helpForRule(command.rule);
+    return help
+      ? ok({
+          text: json ? JSON.stringify({ rule: command.rule, ...help }) : explainRule(command.rule),
+          exitCode: 0,
+        })
+      : err(issue('invalid-arguments', 'explain-rule', `Unknown rule ${command.rule}.`));
+  }
+  if (kind === 'check')
+    return map(await (command.staged ? checkStaged(root) : checkProject(root)), (value) =>
+      diagnosticOutput(value, json),
     );
-    return ok();
-  }
-  const command = args.shift();
-  const rule = command === 'explain' ? (args.shift() ?? '') : '';
-  let root = process.cwd(),
-    file = '',
-    staged = false,
-    json = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === '--json') json = true;
-    else if (argument === '--staged' && command === 'check') staged = true;
-    else if (argument === '--cwd' || (argument === '--file' && command === 'commit-message')) {
-      const value = args[++index];
-      if (!value || value.startsWith('--')) return err(`Missing value for ${argument}.`);
-      if (argument === '--cwd') root = resolve(value);
-      else file = value;
-    } else return err(`Unknown argument ${argument}.\n${usage}`);
-  }
-  if (command === 'init') {
-    const result = await (await import('#src/init.b')).initializeProject(root);
-    console.log(
-      json
-        ? JSON.stringify(result)
-        : [
-            `Created: ${result.created.join(', ') || 'none'}`,
-            `Updated: ${result.updated.join(', ') || 'none'}`,
-            ...result.warnings,
-          ].join('\n'),
+  if (kind === 'typecheck')
+    return map((await import('#src/typecheck.b')).typecheckProject(root), (value) =>
+      diagnosticOutput(value, json),
     );
-    return ok();
-  }
-  if (command === 'explain') {
-    const help = helpForRule(rule);
-    if (!help) return err(`Unknown rule ${rule}.`);
-    console.log(json ? JSON.stringify({ rule, ...help }) : explainRule(rule));
-    return ok();
-  }
-  let diagnostics: readonly Diagnostic[];
-  if (command === 'check')
-    diagnostics = staged ? await checkStaged(root) : await checkProject(root);
-  else if (command === 'typecheck')
-    diagnostics = (await import('#src/typecheck.b')).typecheckProject(root);
-  else if (command === 'commit-message' && file)
-    diagnostics = await checkStagedMessage(root, readFileSync(resolve(root, file), 'utf8'));
-  else return err(usage);
-  console.log(
-    json ? JSON.stringify(diagnostics) : formatDiagnostics(diagnostics) || 'All checks passed.',
+  const message = capture(
+    /** @impure Read the supplied commit message file. */ () =>
+      readFileSync(resolve(root, command.file), 'utf8'),
+    {
+      name: 'read-commit-message',
+    },
   );
-  process.exitCode = diagnostics.some((item) => item.severity === 'error') ? 1 : 0;
+  return isErr(message)
+    ? message
+    : map(await checkStagedMessage(root, get(message)), (value) => diagnosticOutput(value, json));
+};
+
+/** @impure Read process state and render one successful command response. */
+const main = async (): AsyncResult<Unit, CheckFailure> => {
+  const parsed = parseCommand(process.argv.slice(2), process.cwd());
+  if (isErr(parsed)) return parsed;
+  const result = await execute(get(parsed));
+  if (isErr(result)) return result;
+  const output = get(result);
+  console.log(output.text);
+  process.exitCode = output.exitCode;
   return ok();
 };
 
 const outcome = await captureResultAsync(main, { name: 'cli' });
 if (isErr(outcome)) {
-  const problem = getError(outcome);
-  const message =
-    typeof problem === 'string'
-      ? problem
-      : problem.cause instanceof Error
-        ? problem.cause.message
-        : 'Check execution failed.';
+  const message = failureMessage(getError(outcome));
   if (process.argv.includes('--json'))
     console.log(JSON.stringify({ error: { kind: 'operational', message } }));
   else console.error(message);

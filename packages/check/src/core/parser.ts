@@ -258,6 +258,57 @@ const bindImport = (node: Node, env: Map<string, string>): void => {
   }
 };
 
+const signatureFacts = (node: Node, parent: Node): readonly SignatureFact[] => {
+  const kind = text(node, 'type');
+  if (
+    (functionNode(node) ||
+      [
+        'TSDeclareFunction',
+        'TSFunctionType',
+        'TSConstructorType',
+        'TSMethodSignature',
+        'TSCallSignatureDeclaration',
+        'TSConstructSignatureDeclaration',
+        'TSEmptyBodyFunctionExpression',
+      ].includes(kind)) &&
+    Array.isArray(node['params'])
+  ) {
+    return [
+      {
+        offset: ['MethodDefinition', 'TSAbstractMethodDefinition'].includes(text(parent, 'type'))
+          ? offset(parent)
+          : offset(node),
+        parameters: node['params'].filter((parameter) => {
+          const value = record(parameter);
+          return value['type'] !== 'Identifier' || value['name'] !== 'this';
+        }).length,
+      },
+    ];
+  }
+
+  return [];
+};
+
+const functionFacts = (node: Node, parent: Node): readonly FunctionFact[] => {
+  if (functionNode(node)) {
+    const body = record(node['body']);
+    if (Object.keys(body).length > 0) {
+      return [
+        {
+          name:
+            text(record(node['id']), 'name') || text(record(parent['id']), 'name') || '<anonymous>',
+          start: offset(node),
+          bodyStart: offset(body),
+          bodyEnd: offset(body, 'end'),
+          bodyBlock: text(body, 'type') === 'BlockStatement',
+        },
+      ];
+    }
+  }
+
+  return [];
+};
+
 const collect = (source: SourceFile, custom: readonly string[]): ParsedSource => {
   const result = parseSync(source.path, source.content);
   const strict: Fact[] = [],
@@ -315,43 +366,10 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
         name: 'CommonJS imports are not supported by the ESM source graph; use import syntax.',
         offset: offset(node),
       });
-    if (functionNode(node)) {
-      const body = record(node['body']);
-      if (Object.keys(body).length > 0) {
-        hasImplementation = true;
-        functions.push({
-          name:
-            text(record(node['id']), 'name') || text(record(parent['id']), 'name') || '<anonymous>',
-          start: offset(node),
-          bodyStart: offset(body),
-          bodyEnd: offset(body, 'end'),
-          bodyBlock: text(body, 'type') === 'BlockStatement',
-        });
-      }
-    }
-    if (
-      (functionNode(node) ||
-        [
-          'TSDeclareFunction',
-          'TSFunctionType',
-          'TSConstructorType',
-          'TSMethodSignature',
-          'TSCallSignatureDeclaration',
-          'TSConstructSignatureDeclaration',
-          'TSEmptyBodyFunctionExpression',
-        ].includes(kind)) &&
-      Array.isArray(node['params'])
-    ) {
-      signatures.push({
-        offset: ['MethodDefinition', 'TSAbstractMethodDefinition'].includes(text(parent, 'type'))
-          ? offset(parent)
-          : offset(node),
-        parameters: node['params'].filter((parameter) => {
-          const value = record(parameter);
-          return value['type'] !== 'Identifier' || value['name'] !== 'this';
-        }).length,
-      });
-    }
+    const declaredFunctions = functionFacts(node, parent);
+    if (declaredFunctions.length) hasImplementation = true;
+    functions.push(...declaredFunctions);
+    signatures.push(...signatureFacts(node, parent));
     if (['CallExpression', 'NewExpression', 'MemberExpression'].includes(kind)) {
       const expression = kind === 'MemberExpression' ? node : record(node['callee']);
       const name = expressionName(expression, env);
@@ -407,7 +425,7 @@ export const parseSource = (
 ): ParsedSource => {
   const captured = capture(() => collect(source, effectImports), { name: 'parse-source' });
   if (isErr(captured)) {
-    const cause = getError(captured).cause;
+    const failure = getError(captured);
     return {
       comments: [],
       functions: [],
@@ -416,7 +434,7 @@ export const parseSource = (
       strict: [],
       effects: [],
       hasImplementation: false,
-      issues: [{ name: cause instanceof Error ? cause.message : 'Parser failed.', offset: 0 }],
+      issues: [{ name: failure.message, offset: 0 }],
     };
   }
   return get(captured);

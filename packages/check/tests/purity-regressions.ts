@@ -1,3 +1,4 @@
+import { success } from '#tests/fixtures/result';
 import { expect, it } from 'vitest';
 import { analyzeSources, runChecks } from '@ts-calm/check';
 import { withProject } from '#tests/fixtures/project';
@@ -46,7 +47,9 @@ it('resolves imported aliases before deciding whether a collection mutates', asy
     },
     async (root) =>
       expect(
-        (await checkSourceProject(root, config)).filter((issue) => issue.rule === 'purity/impure'),
+        success(await checkSourceProject(root, config)).filter(
+          (issue) => issue.rule === 'purity/impure',
+        ),
       ).toHaveLength(1),
   );
 });

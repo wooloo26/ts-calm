@@ -1,3 +1,4 @@
+import { success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { checkSourceProject as checkProject } from '@ts-calm/check';
 import { linkDependencies, withProject } from '#tests/fixtures/project';
@@ -15,7 +16,7 @@ describe('project import graph', () => {
         'src/config.ts': 'export default {rules:{"strict-fp":false}};',
         'src/a.ts': 'export const value=null;',
       },
-      async (root) => expect(await checkProject(root)).toEqual([]),
+      async (root) => expect(success(await checkProject(root))).toEqual([]),
     );
   });
   it('includes type queries and constant template imports', async () => {
@@ -25,7 +26,7 @@ describe('project import graph', () => {
         'b.ts': 'export type B=import("./a.ts").A;',
       },
       async (root) =>
-        expect((await checkProject(root, relaxed)).map((issue) => issue.rule)).toContain(
+        expect(success(await checkProject(root, relaxed)).map((issue) => issue.rule)).toContain(
           'no-file-cycles',
         ),
     );
@@ -35,7 +36,7 @@ describe('project import graph', () => {
         'b.ts': 'export const b=()=>import(`./a.ts`);',
       },
       async (root) =>
-        expect((await checkProject(root, relaxed)).map((issue) => issue.rule)).toContain(
+        expect(success(await checkProject(root, relaxed)).map((issue) => issue.rule)).toContain(
           'no-file-cycles',
         ),
     );
@@ -54,7 +55,7 @@ describe('project import graph', () => {
           'consumer.ts': statement + ' export type {T};',
         },
         async (root) => {
-          const diagnostics = await checkProject(root, relaxed);
+          const diagnostics = success(await checkProject(root, relaxed));
           expect(diagnostics.filter((issue) => issue.rule === 'imports/resolve')).toEqual([]);
           expect(diagnostics.map((issue) => issue.rule)).toContain('no-file-cycles');
         },
@@ -77,7 +78,7 @@ describe('project import graph', () => {
     },
   ])('reports each form of file cycle', async (files) => {
     await withProject(files, async (root) => {
-      const issues = await checkProject(root, relaxed);
+      const issues = success(await checkProject(root, relaxed));
       expect(issues.some((issue) => issue.rule === 'no-file-cycles')).toBe(true);
       expect(issues.find((issue) => issue.rule === 'no-file-cycles')?.message).toContain(
         'src/a.ts',
@@ -91,7 +92,7 @@ describe('project import graph', () => {
         'src/b.ts': 'export {x} from "./leaf.ts"',
         'src/leaf.ts': 'import {join} from "node:path"; export const x=join("a","b");',
       },
-      async (root) => expect(await checkProject(root)).toEqual([]),
+      async (root) => expect(success(await checkProject(root))).toEqual([]),
     );
   });
   it('resolves tsconfig paths and package imports aliases', async () => {
@@ -103,7 +104,7 @@ describe('project import graph', () => {
         'src/b.ts': 'export * from "#src/a.ts";',
       },
       async (root) =>
-        expect((await checkProject(root, relaxed)).map((issue) => issue.rule)).toContain(
+        expect(success(await checkProject(root, relaxed)).map((issue) => issue.rule)).toContain(
           'no-file-cycles',
         ),
     );
@@ -120,7 +121,7 @@ describe('project import graph', () => {
         'packages/b/src/index.ts': 'export {value} from "@example/a/value";',
       },
       async (root) => {
-        const diagnostics = await checkProject(root, relaxed);
+        const diagnostics = success(await checkProject(root, relaxed));
         expect(diagnostics.filter((issue) => issue.rule === 'imports/resolve')).toEqual([]);
         expect(diagnostics.map((issue) => issue.rule)).toContain('no-file-cycles');
       },
@@ -130,7 +131,7 @@ describe('project import graph', () => {
     await withProject(
       { 'src/a.ts': 'export * from "./missing.ts";', 'src/b.ts': 'export const = ;' },
       async (root) =>
-        expect((await checkProject(root)).map((issue) => issue.rule)).toEqual(
+        expect(success(await checkProject(root)).map((issue) => issue.rule)).toEqual(
           expect.arrayContaining(['imports/resolve', 'source/parse']),
         ),
     );
@@ -138,7 +139,7 @@ describe('project import graph', () => {
       { 'src/a.ts': 'export * from "./b.ts";', 'src/b.ts': 'export const b=1;' },
       async (root) =>
         expect(
-          (await checkProject(root, { files: ['src/a.ts'] })).map((issue) => issue.rule),
+          success(await checkProject(root, { files: ['src/a.ts'] })).map((issue) => issue.rule),
         ).toContain('imports/resolve'),
     );
   });
@@ -146,7 +147,9 @@ describe('project import graph', () => {
     await withProject(
       { 'src/a.ts': 'import {ok} from "ts-calm"; export const a=ok(1);' },
       async (root) => {
-        expect((await checkProject(root)).map((issue) => issue.rule)).toContain('imports/resolve');
+        expect(success(await checkProject(root)).map((issue) => issue.rule)).toContain(
+          'imports/resolve',
+        );
       },
     );
     await withProject(
@@ -156,7 +159,7 @@ describe('project import graph', () => {
       },
       async (root) => {
         linkDependencies(root);
-        expect(await checkProject(root)).toEqual([]);
+        expect(success(await checkProject(root))).toEqual([]);
       },
     );
   });
@@ -167,7 +170,7 @@ describe('project import graph', () => {
           '{"compilerOptions":{"strict":true,"module":"NodeNext","moduleResolution":"NodeNext","target":"ES2024","types":[]}}',
         'src/a.ts': 'export const a = 1;',
       },
-      async (root) => expect(await checkProject(root)).toEqual([]),
+      async (root) => expect(success(await checkProject(root))).toEqual([]),
     );
   });
 });

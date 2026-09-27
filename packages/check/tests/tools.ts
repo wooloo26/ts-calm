@@ -1,3 +1,4 @@
+import { failureText, success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,7 +30,7 @@ describe('complete static checking', () => {
           'export const name:string=42;\nexport function run(){Promise.resolve(1);return null;}',
       },
       async (root) => {
-        const diagnostics = await checkProject(root);
+        const diagnostics = success(await checkProject(root));
         expect(onlyOwnedRules(diagnostics)).toBe(true);
         const absence = diagnostics.find((item) => item.rule === 'strict-fp/no-null');
         expect(absence?.help).toContain('fromNullable');
@@ -44,22 +45,22 @@ describe('complete static checking', () => {
           ...base,
           'src/adapter.b.ts': `/**\n * @boundary Adapt an external untyped callback shape.\n */\n// @allow strict-fp/${allowance} -- External callback type cannot be expressed here.\nexport const adapter=(value:any)=>value;`,
         },
-        async (root) => expect(await checkProject(root)).toEqual([]),
+        async (root) => expect(success(await checkProject(root))).toEqual([]),
       );
     await withProject(
       { ...base, 'src/a.ts': 'export const f=(value:any)=>value;' },
       async (root) => {
-        expect((await checkProject(root)).filter((item) => item.rule.includes('any'))).toHaveLength(
-          1,
-        );
+        expect(
+          success(await checkProject(root)).filter((item) => item.rule.includes('any')),
+        ).toHaveLength(1);
         write(root, 'ts-calm.config.ts', 'export default {rules:{"strict-fp":{"no-any":false}}}');
-        expect(await checkProject(root)).toEqual([]);
+        expect(success(await checkProject(root))).toEqual([]);
       },
     );
   });
   it('does not skip a missing compiler configuration', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) =>
-      expect(() => typecheckProject(root)).toThrow('tsconfig.json is missing'),
+      expect(failureText(typecheckProject(root))).toContain('tsconfig.json is missing'),
     );
   });
 });
@@ -75,7 +76,7 @@ describe('initialization and guidance', () => {
       async (root) => {
         const paths = ['package.json', 'tsconfig.json'];
         const before = paths.map((path) => readFileSync(join(root, path)));
-        const result = await initializeProject(root);
+        const result = success(await initializeProject(root));
         expect(result.created).toEqual([]);
         expect(result.updated).toEqual([]);
         expect(result.warnings[0]).toContain('commonjs');
@@ -86,7 +87,7 @@ describe('initialization and guidance', () => {
   it('creates only the ESM manifest and no compiler configuration', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) => {
       rmSync(join(root, 'package.json'));
-      expect(await initializeProject(root)).toEqual({
+      expect(success(await initializeProject(root))).toEqual({
         created: ['package.json'],
         updated: [],
         warnings: [],
@@ -95,7 +96,7 @@ describe('initialization and guidance', () => {
       const written = readFileSync(join(root, 'package.json'), 'utf8');
       expect(JSON.parse(written)).toEqual({ type: 'module' });
       expect(written.endsWith('\n')).toBe(true);
-      expect(await initializeProject(root)).toEqual({
+      expect(success(await initializeProject(root))).toEqual({
         created: [],
         updated: [],
         warnings: [],
@@ -116,7 +117,7 @@ it('runs the source rules against the staged snapshot rather than the working tr
     write(root, 'src/a.ts', 'export const value=null;');
     git(root, 'add', 'src/a.ts');
     const index = git(root, 'ls-files', '--stage', '-z');
-    const issues = await checkStaged(root);
+    const issues = success(await checkStaged(root));
     expect(issues.some((item) => item.rule === 'strict-fp/no-null')).toBe(true);
     expect(onlyOwnedRules(issues)).toBe(true);
     expect(git(root, 'ls-files', '--stage', '-z')).toBe(index);
@@ -125,6 +126,8 @@ it('runs the source rules against the staged snapshot rather than the working tr
 
 it('reports compiler errors from the typecheck command', async () => {
   await withProject({ ...base, 'src/a.ts': 'export const a:string=1;' }, async (root) => {
-    expect(typecheckProject(root).some((item) => item.rule === 'typecheck/TS2322')).toBe(true);
+    expect(success(typecheckProject(root)).some((item) => item.rule === 'typecheck/TS2322')).toBe(
+      true,
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { failureText, success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { analyzeSources, explainRule, runChecks, validateConfiguration } from '@ts-calm/check';
 import type { CheckConfig } from '@ts-calm/check';
@@ -100,15 +101,17 @@ describe('parameter limits', () => {
   it('keeps declaration files excluded', () =>
     expect(check(`declare function f(${four}):void;`, {}, 'src/value.d.ts')).toEqual([]));
   it('validates boolean configuration and rejects a configurable maximum', () => {
-    expect(validateConfiguration({ rules: { 'function-params': true } })).toEqual({
+    expect(success(validateConfiguration({ rules: { 'function-params': true } }))).toEqual({
       rules: { 'function-params': true },
     });
-    expect(() => validateConfiguration({ rules: { 'function-params': { maximum: 4 } } })).toThrow(
-      'must be a boolean',
-    );
-    expect(() =>
-      validateConfiguration({ overrides: [{ files: ['**'], rules: { 'function-params': 3 } }] }),
-    ).toThrow('booleans');
+    expect(
+      failureText(validateConfiguration({ rules: { 'function-params': { maximum: 4 } } })),
+    ).toContain('must be a boolean');
+    expect(
+      failureText(
+        validateConfiguration({ overrides: [{ files: ['**'], rules: { 'function-params': 3 } }] }),
+      ),
+    ).toContain('booleans');
     expect(explainRule('function-params')).toContain('@allow function-params');
   });
 });

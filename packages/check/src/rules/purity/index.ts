@@ -6,6 +6,15 @@ import type { AnalyzedFile, CheckConfig, Diagnostic, ResolvedImport } from '#src
 import type { Project, Evaluation } from '#src/rules/purity/values';
 import type { FunctionModel, PurityModel } from '#src/rules/purity/model';
 
+const functionLabel = (project: Project, fn: FunctionModel): string => {
+  const owner = project.functions.get(fn.parent);
+  const siblings = [...project.functions.values()].filter(
+    (value) => value.parent === fn.parent && !value.name,
+  );
+  const name = fn.name || `<callback ${siblings.findIndex((value) => value.id === fn.id) + 1}>`;
+  return owner ? `${functionLabel(project, owner)}.${name}` : name;
+};
+
 const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonly Diagnostic[] =>
   models.flatMap((model) => {
     if (!enabled('purity', model.file.source.path, config)) return [];
@@ -99,7 +108,7 @@ export const checkPurity = (
     if (!model || !result) continue;
     if (result.incomplete) {
       const names = incomplete.get(fn.file) ?? [];
-      names.push(fn.name || '<callback>');
+      names.push(functionLabel(project, fn));
       incomplete.set(fn.file, names);
     }
     if (fn.annotated && !fn.reason)
@@ -135,13 +144,14 @@ export const checkPurity = (
   for (const [path, names] of incomplete) {
     const file = project.models.get(path)?.file;
     if (file)
-      diagnostics.push(
-        diagnostic(file.source, 'purity/incomplete', {
+      diagnostics.push({
+        ...diagnostic(file.source, 'purity/incomplete', {
           message: `Purity analysis reached its context budget in ${names.slice(0, 4).join(', ')}${names.length > 4 ? ' and other functions' : ''}; unvisited calls remain unproven.`,
           offset: 0,
           severity: 'warning',
         }),
-      );
+        help: `Incomplete functions: ${[...new Set(names)].join(', ')}`,
+      });
   }
   return [...diagnostics, ...misplaced([...project.models.values()], config)];
 };

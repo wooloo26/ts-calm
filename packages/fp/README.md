@@ -1,48 +1,23 @@
 # @ts-calm/fp
 
-Calm defaults for functional TypeScript: Option and Result containers, combinators, safe
-external-value guards and explicit serialization. Node 24+, ESM, MIT, no runtime dependencies.
+Option, Result, combinators, guards and codecs. Node 24+, ESM, no runtime dependencies.
 
 | Entry                  | Contents                                                         |
 | ---------------------- | ---------------------------------------------------------------- |
-| `@ts-calm/fp`          | Containers, combinators, collections, guards, codecs, data DTOs  |
+| `@ts-calm/fp`          | Containers, combinators, collections, guards and codecs          |
 | `@ts-calm/fp/boundary` | `capture`, `captureAsync`, `captureResult`, `captureResultAsync` |
 
-```ts
-import { fromNullable, match } from '@ts-calm/fp';
-
-const externalName: unknown = 'Ada';
-const label = match(fromNullable(externalName), {
-  some: (value) => String(value),
-  none: () => 'missing',
-});
-```
-
-Portable: runtime modules import each other relatively and use no Node-only `#` mapping, so a bundler
-or browser reads the sources as they are.
-
-## Guarantees
-
-- Containers are frozen and carry no public fields; `isOk`, `isErr`, `isSome`, `isNone`, `isResult`
-  and `isOption` reject structural lookalikes.
-- Guards fail closed: a revoked or uninspectable proxy yields `false`, never a throw.
-- `isNumber` accepts finite primitives only; `isNull` and `isUndefined` are sentinel checks, not a
-  replacement for `fromNullable`.
-- Serialization is explicit: `toResultData`, `toOptionData` and `encodeJson` publish only the
-  documented DTO shapes.
-
-Containers belong to the module instance that created them. Spreading, proxying, or copying their
-symbols does not create an authenticated container; use constructors or the explicit DTO decoders.
-Only the container is frozen: payloads remain the caller's values by reference.
-
-`lookup` accepts dictionaries and native Maps, including Maps from another realm. A custom object
-with `get`/`has` methods remains a dictionary. Convert a custom map implementation with
-`new Map(custom.entries())` before using the Map overload.
+- Containers are frozen and authenticated by their module instance. Copies, proxies and structural
+  lookalikes are not containers; payloads remain the caller's values. Use explicit DTOs for serialization.
+- Guards return false for uninspectable proxies. `isNumber` accepts finite primitives;
+  use `fromNullable` for absence and sentinel predicates only when the distinction matters.
+- `lookup` accepts dictionaries and native Maps, including cross-realm Maps. Convert custom
+  map implementations with `new Map(custom.entries())`.
+- Runtime imports are relative and portable to browsers and bundlers.
 
 ## Input to output
 
-This example is compiled and tested in `tests/fixtures/profile.ts`. A domain validation error stays
-distinct from JSON parsing or serialization errors. Callers can use `match` to render either branch.
+This [tested example](tests/fixtures/profile.ts) keeps validation errors distinct from JSON failures:
 
 ```ts
 import {
@@ -79,6 +54,5 @@ export const awardPoint = (text: string) => {
 ```
 
 `awardPoint('{"name":" Ada ","score":1}')` succeeds with `'{"name":"Ada","score":2}'`.
-An invalid profile returns `err('invalid-profile')`; malformed JSON returns a JSON issue.
-
-See [necessary line allowances](../../docs/allow.md) for boundary exceptions and fp replacements.
+Invalid input returns `err('invalid-profile')`; malformed JSON returns a JSON issue.
+See [necessary allowances](../../docs/allow.md) for cases that helpers cannot replace.

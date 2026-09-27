@@ -1,65 +1,43 @@
 /**
- * @boundary Create the missing Node ESM manifest choice, preserving existing project decisions.
+ * @boundary Read and apply a manifest plan, preserving existing project choices and reporting write failures.
  * @effects node:fs
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isPlainObject } from '@ts-calm/fp';
+import { err, get, isErr, ok } from '@ts-calm/fp';
+import type { AsyncResult } from '@ts-calm/fp';
+import { capture, captureResult } from '@ts-calm/fp/boundary';
+import { planInitialization } from '#src/manifest';
+import type { InitResult } from '#src/manifest';
+import { issue } from '#src/core/issues';
+import type { CheckFailure } from '#src/core/issues';
 
-/**
- * The files created or updated by one `init` invocation.
- *
- * Only `package.json` is ever created or updated; compiler, formatter and linter files belong to
- * the project's own toolchain. `warnings` carries choices that were preserved but may need
- * attention, such as an existing `type=commonjs` manifest.
- */
-export type InitResult = Readonly<{
-  /** Project-relative paths created by this call. */
-  created: readonly string[];
-  /** Project-relative paths that existed and were updated. */
-  updated: readonly string[];
-  /** Non-fatal notes about preserved decisions. */
-  warnings: readonly string[];
-}>;
-const keep = (_key: string, item: unknown): unknown => item;
-const pretty = (value: unknown): string => JSON.stringify(value, keep, 2) + '\n';
-
-/**
- * Create the missing Node ESM project configuration.
- *
- * @impure Reads and writes the project manifest.
- * Existing files and existing manifest choices are preserved; only a missing ESM `type` is added,
- * written exactly as JSON so no formatter is involved. A project provides its own `tsconfig.json`,
- * formatter and linter configuration, so nothing else is created here.
- *
- * @param root - Absolute project root.
- * @returns The created and updated paths plus any warnings.
- * @throws If `package.json` is invalid or changes concurrently.
- */
-export const initializeProject = async (root: string): Promise<InitResult> => {
-  const created: string[] = [],
-    updated: string[] = [],
-    warnings: string[] = [];
-  const packagePath = join(root, 'package.json');
-  const previous = existsSync(packagePath) ? readFileSync(packagePath, 'utf8') : '';
-  const manifest: unknown = previous ? JSON.parse(previous) : {};
-  // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-  if (!isPlainObject(manifest)) throw new Error('package.json must contain an object.');
-  if (!Object.hasOwn(manifest, 'type')) {
-    const content = pretty({ ...manifest, type: 'module' });
-    if (previous) {
-      if (readFileSync(packagePath, 'utf8') !== previous)
-        // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-        throw new Error('package.json changed during init; retry.');
-      writeFileSync(packagePath, content);
-      updated.push('package.json');
-    } else {
-      writeFileSync(packagePath, content, { flag: 'wx' });
-      created.push('package.json');
-    }
-  } else if (manifest['type'] !== 'module')
-    warnings.push(
-      `Kept package.json type=${String(manifest['type'])}; adjust your module configuration before using Node ESM exports.`,
-    );
-  return { created, updated, warnings };
+/** @impure Read and write only the project's package manifest. */
+export const initializeProject = async (root: string): AsyncResult<InitResult, CheckFailure> => {
+  const path = join(root, 'package.json');
+  const read = capture(() => (existsSync(path) ? readFileSync(path, 'utf8') : ''), {
+    name: 'read-package-manifest',
+  });
+  if (isErr(read)) return read;
+  const previous = get(read),
+    plan = planInitialization(previous);
+  if (isErr(plan)) return plan;
+  const { content, result } = get(plan);
+  if (!content) return ok(result);
+  return captureResult(
+    () => {
+      if (previous && readFileSync(path, 'utf8') !== previous)
+        return err(
+          issue(
+            'invalid-manifest',
+            'write-package-manifest',
+            'package.json changed during init; retry.',
+          ),
+        );
+      if (previous) writeFileSync(path, content);
+      else writeFileSync(path, content, { flag: 'wx' });
+      return ok(result);
+    },
+    { name: 'write-package-manifest' },
+  );
 };

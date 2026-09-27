@@ -1,5 +1,5 @@
 /**
- * @boundary Build a dependency view whose workspace links stay inside the staged snapshot.
+ * @boundary Discover installed packages and link them to the origins selected by the snapshot policy.
  * @effects node:fs
  */
 import {
@@ -12,14 +12,15 @@ import {
   realpathSync,
   symlinkSync,
 } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { get, isErr, ok } from '@ts-calm/fp';
+import type { Result, Unit } from '@ts-calm/fp';
+import { captureResult } from '@ts-calm/fp/boundary';
+import { dependencyTarget } from '#src/snapshot';
+import { decodeManifest } from '#src/manifest';
+import type { CheckFailure } from '#src/core/issues';
 
-const inside = (root: string, target: string): boolean => {
-  const path = relative(root, target);
-  return !isAbsolute(path) && path !== '..' && !path.startsWith('../') && !path.startsWith('..\\');
-};
-
-/** @impure Enumerate public dependency entries, without exposing the package manager's store. */
+/** @impure Enumerate public dependency entries without exposing the package manager store. */
 const dependencies = (directory: string): readonly string[] => {
   if (!existsSync(directory)) return [];
   const result: string[] = [];
@@ -33,44 +34,44 @@ const dependencies = (directory: string): readonly string[] => {
   return result;
 };
 
-/** @impure Create private dependency directories and link each installed package to its allowed origin. */
+/** @impure Link installed dependencies into this invocation's private snapshot. */
 export const linkSnapshotDependencies = (
   repository: string,
   snapshot: string,
   manifests: readonly string[],
-): void => {
-  const staged = new Set(manifests.map((path) => dirname(path).replaceAll('\\', '/')));
-  const packages = new Map<string, string>();
-  for (const manifest of manifests) {
-    const data: unknown = JSON.parse(readFileSync(join(snapshot, manifest), 'utf8'));
-    if (typeof data === 'object' && data && 'name' in data && typeof data.name === 'string')
-      packages.set(data.name, dirname(manifest));
-  }
-  for (const manifest of manifests) {
-    const directory = dirname(manifest);
-    const installed = join(repository, directory, 'node_modules');
-    for (const name of dependencies(installed)) {
-      const installedPath = join(installed, name);
-      const linked = lstatSync(installedPath).isSymbolicLink()
-        ? resolve(dirname(installedPath), readlinkSync(installedPath))
-        : installedPath;
-      const original = existsSync(linked) ? realpathSync(linked) : linked;
-      const local = relative(repository, original).replaceAll('\\', '/');
-      const workspace = inside(repository, original) && !local.split('/').includes('node_modules');
-      if (workspace && !staged.has(local || '.'))
-        // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-        throw new Error(
-          `Workspace dependency ${name} is missing from the staged snapshot: ${local}.`,
-        );
-      const packageDirectory = packages.get(name);
-      const target = packageDirectory
-        ? join(snapshot, packageDirectory)
-        : workspace
-          ? join(snapshot, local)
-          : realpathSync(installedPath);
-      const destination = join(snapshot, directory, 'node_modules', name);
-      mkdirSync(dirname(destination), { recursive: true });
-      symlinkSync(target, destination, 'junction');
-    }
-  }
-};
+): Result<Unit, CheckFailure> =>
+  captureResult(
+    () => {
+      const staged = new Set(manifests.map((path) => dirname(path).replaceAll('\\', '/')));
+      const packages = new Map<string, string>();
+      for (const path of manifests) {
+        const decoded = decodeManifest(readFileSync(join(snapshot, path), 'utf8'));
+        if (isErr(decoded)) return decoded;
+        const name = get(decoded)['name'];
+        if (typeof name === 'string') packages.set(name, dirname(path));
+      }
+      for (const path of manifests) {
+        const directory = dirname(path),
+          installed = join(repository, directory, 'node_modules');
+        for (const name of dependencies(installed)) {
+          const installedPath = join(installed, name);
+          const linked = lstatSync(installedPath).isSymbolicLink()
+            ? resolve(dirname(installedPath), readlinkSync(installedPath))
+            : installedPath;
+          const original = existsSync(linked) ? realpathSync(linked) : linked;
+          const planned = dependencyTarget(
+            { repository, snapshot, staged, packages },
+            { name, original, directory },
+          );
+          if (isErr(planned)) return planned;
+          const { target, destination } = get(planned);
+          // External dependencies must exist; only staged workspace targets may replace missing live files.
+          if (target === original) realpathSync(installedPath);
+          mkdirSync(dirname(destination), { recursive: true });
+          symlinkSync(target, destination, 'junction');
+        }
+      }
+      return ok();
+    },
+    { name: 'link-snapshot-dependencies' },
+  );

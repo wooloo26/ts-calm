@@ -1,10 +1,11 @@
+import { evaluateFp } from '#src/rules/purity/fp';
 import { record, text, offset, children, functionNode, effectName } from '#src/core/parser';
 import { property, unique, unknown, fnForExport, referenceShape } from '#src/rules/purity/values';
 import type { Node } from '#src/core/parser';
 import type { FunctionModel, PurityModel, Binding } from '#src/rules/purity/model';
 import { typeKind } from '#src/rules/purity/model';
 import { summaryContext, reusableReturn, sameValues } from '#src/rules/purity/summaries';
-import type { Value, Frame, Evaluation, Project } from '#src/rules/purity/values';
+import type { Value, Frame, Evaluation, Project, FunctionSummary } from '#src/rules/purity/values';
 
 type Context = Readonly<{
   project: Project;
@@ -62,27 +63,6 @@ const callbackMethods = [
   'sort',
   'toSorted',
 ];
-const fpCallbacks: Readonly<Record<string, readonly number[]>> = {
-  capture: [0],
-  captureAsync: [0],
-  captureResult: [0],
-  captureResultAsync: [0],
-  map: [1],
-  flatMap: [1],
-  mapError: [1],
-  filter: [1, 2],
-  findValue: [1],
-  andThrough: [1],
-  inspect: [1],
-  inspectError: [1],
-  getOrElse: [1],
-  orElse: [1],
-  traverse: [1],
-  traverseAsync: [1],
-  filterMap: [1],
-  findMap: [1],
-  isUniqueBy: [1],
-};
 const nodes = (value: unknown): Node[] => (Array.isArray(value) ? value.map(record) : []);
 const literalKey = (node: Node): string => {
   const value = node['value'];
@@ -153,6 +133,35 @@ const bindingValue = (
     return id ? [{ kind: 'function' as const, id }] : [];
   });
   if (declared.length) return declared;
+  if (!binding.mutable && !frame.active.has(binding.owner) && !seen.has(binding.id)) {
+    for (const initial of binding.values) {
+      if (initial['type'] !== 'CallExpression') continue;
+      const callee = record(initial['callee']);
+      if (
+        callee['type'] !== 'Identifier' &&
+        !(
+          callee['type'] === 'MemberExpression' && record(callee['object'])['type'] === 'Identifier'
+        )
+      )
+        continue;
+      const targets = resolveValue(context, frame, {
+        node: callee,
+        seen: new Set([...seen, binding.id]),
+      });
+      if (
+        targets.some((value) => value.kind === 'external' && value.name === '@ts-calm/fp:branded')
+      )
+        return [
+          {
+            kind: 'decoder',
+            callbacks: resolveValue(context, frame, {
+              node: nodes(initial['arguments'])[1] ?? {},
+              seen: new Set([...seen, binding.id]),
+            }),
+          },
+        ];
+    }
+  }
   if (
     !binding.parameter &&
     !frame.active.has(binding.owner) &&
@@ -348,8 +357,10 @@ const invoke = (
   unique(
     values.flatMap(
       /** @impure Evaluate calls using the supplied mutable analysis context. */ (value) => {
+        if (value.kind === 'decoder-call')
+          return invoke(context, frame, { values: value.callbacks, args, node });
         if (value.kind === 'function')
-          return evaluateFunction(context, value.id, { args, ...(frame ? { caller: frame } : {}) });
+          return evaluateFunction(context, value.id, { args, caller: frame });
         if (value.kind === 'external') {
           const name = value.name.replace(/^globalThis\./, '');
           const known = effectName(name, context.project.custom);
@@ -358,8 +369,30 @@ const invoke = (
             effect(context, frame, { message: 'current time', node });
           const match = /^@ts-calm\/fp(?:\/boundary)?:([^.]+)$/.exec(name);
           if (match)
-            for (const index of fpCallbacks[match[1] ?? ''] ?? [])
-              invoke(context, frame, { values: args[index] ?? [], args: [[unknown]], node });
+            return evaluateFp(match[1] ?? '', args, {
+              /** @impure Evaluate supplied callback functions in the current analysis. */
+              call: (callbacks, inputs) =>
+                invoke(context, frame, { values: callbacks, args: inputs, node }),
+              read: (values, key) => access(context, values, key),
+              allocate: (shape, slots) => [
+                {
+                  kind: 'fresh',
+                  id:
+                    context.root +
+                    ':' +
+                    frame.allocation +
+                    ':' +
+                    frame.fn.id +
+                    ':fp:' +
+                    offset(node) +
+                    ':' +
+                    shape,
+                  shape,
+                  slots: new Map(Object.entries(slots)),
+                  spread: [],
+                },
+              ],
+            });
           return [{ kind: 'external' as const, name: `${name}()` }];
         }
         return [unknown];
@@ -626,7 +659,13 @@ const executeFunction = (
   for (const parameter of fn.params) {
     let value = args[parameter.index];
     if (value) for (const key of parameter.path) value = access(context, value, key);
-    if (value) env.set(parameter.binding, value);
+    if (value) {
+      const shape = context.project.bindings.get(parameter.binding)?.type ?? '';
+      env.set(
+        parameter.binding,
+        value.map((item) => (item.kind === 'reference' && !item.shape ? { ...item, shape } : item)),
+      );
+    }
   }
   const frame: Frame = {
     fn,
@@ -682,6 +721,28 @@ const executeFunction = (
   );
 };
 
+const initialSummary = (
+  id: string,
+  args: readonly (readonly Value[])[],
+  options: Readonly<{ recursion: string; caller?: Frame }>,
+): FunctionSummary => {
+  const { recursion, caller } = options;
+  return {
+    id,
+    args,
+    ...(caller ? { caller } : {}),
+    values: [],
+    active: false,
+    ready: false,
+    reusable: false,
+    recursive: false,
+    invalidated: false,
+    dependents: new Set(),
+    recursion,
+    revision: 0,
+  };
+};
+
 /** @impure Reuse contextual summaries and schedule recursive return dependencies until stable. */
 export const evaluateFunction = (
   context: Context,
@@ -692,7 +753,7 @@ export const evaluateFunction = (
   if (!fn) return [unknown];
   const description = summaryContext(context.project, fn, {
     args,
-    ...(caller ? { caller: caller } : {}),
+    ...(caller ? { caller } : {}),
   });
   let key = description.key;
   const { borrowed, recursion } = description;
@@ -704,20 +765,7 @@ export const evaluateFunction = (
   if (recursive) key = recursive;
   let summary = evaluation.summaries.get(key);
   if (!summary) {
-    summary = {
-      id,
-      args,
-      ...(caller ? { caller } : {}),
-      values: [],
-      active: false,
-      ready: false,
-      reusable: false,
-      recursive: false,
-      invalidated: false,
-      dependents: new Set(),
-      recursion,
-      revision: 0,
-    };
+    summary = initialSummary(id, args, { recursion, ...(caller ? { caller } : {}) });
     evaluation.summaries.set(key, summary);
   }
   if (caller) summary.dependents.add(caller.summary);
@@ -752,7 +800,7 @@ export const evaluateFunction = (
   const returned = executeFunction(context, fn, {
     summary: key,
     args,
-    ...(caller ? { caller: caller } : {}),
+    ...(caller ? { caller } : {}),
   });
   const reusable = reusableReturn(returned, context.project);
   const values = summary.recursive

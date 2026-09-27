@@ -1,0 +1,76 @@
+[
+  {
+    "file": "packages/check/src/cli.b.ts",
+    "functions": ["execute", "main"]
+  },
+  {
+    "file": "packages/check/src/core/parser.ts",
+    "functions": ["bindingNames", "scoped", "collect", "collect.walk", "parseSource.<callback 1>"]
+  },
+  {
+    "file": "packages/check/src/engine.ts",
+    "functions": ["runAnalyzedChecks", "runChecks"]
+  },
+  {
+    "file": "packages/check/src/project.ts",
+    "functions": ["checkProject"]
+  },
+  {
+    "file": "packages/check/src/rules/purity/eval.ts",
+    "functions": [
+      "access",
+      "access.<callback 1>",
+      "bindingValue",
+      "bindingValue.<callback 4>",
+      "fresh",
+      "fresh.<callback 1>",
+      "resolveValue",
+      "read",
+      "invoke.<callback 1>",
+      "invoke.<callback 1>.read",
+      "collectionResult",
+      "collectionArguments",
+      "call",
+      "call.<callback 1>",
+      "call.<callback 4>",
+      "visit",
+      "executeFunction",
+      "executeFunction.<callback 2>",
+      "executeFunction.collect",
+      "evaluateFunction",
+      "evaluatePurity"
+    ]
+  },
+  {
+    "file": "packages/check/src/rules/purity/index.ts",
+    "functions": [
+      "projectOf",
+      "projectOf.<callback 1>",
+      "settle",
+      "settle.<callback 3>",
+      "checkPurity"
+    ]
+  },
+  {
+    "file": "packages/check/src/rules/purity/model.ts",
+    "functions": [
+      "typeKind",
+      "declare",
+      "declare.<callback 1>",
+      "predeclare",
+      "declareIteration",
+      "walkFunction",
+      "walkFunction.<callback 1>",
+      "walkModel",
+      "buildPurityModel"
+    ]
+  },
+  {
+    "file": "packages/check/src/rules/purity/values.ts",
+    "functions": ["referenceShape", "property", "property.<callback 1>", "property.<callback 2>"]
+  },
+  {
+    "file": "packages/check/src/staged.b.ts",
+    "functions": ["checkStaged", "checkStagedMessage"]
+  }
+]

@@ -1,3 +1,4 @@
+import { success } from '#tests/fixtures/result';
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,8 +20,8 @@ describe('configuration discovery', () => {
         'src/a.b.ts': adapter,
       },
       async (root) => {
-        const fromProject = (await checkSourceProject(root)).map((issue) => issue.rule);
-        const fromDirectory = (await checkSourceProject(join(root, 'src'))).map(
+        const fromProject = success(await checkSourceProject(root)).map((issue) => issue.rule);
+        const fromDirectory = success(await checkSourceProject(join(root, 'src'))).map(
           (issue) => issue.rule,
         );
         expect(fromProject).toContain('boundary/undeclared');
@@ -36,16 +37,16 @@ describe('configuration discovery', () => {
         'src/a.ts': 'export const f=()=>undefined;',
       },
       async (root) => {
-        expect(await checkSourceProject(root)).toEqual([]);
-        expect((await checkSourceProject(join(root, 'src'))).map((issue) => issue.rule)).toContain(
-          'strict-fp/no-undefined',
-        );
+        expect(success(await checkSourceProject(root))).toEqual([]);
+        expect(
+          success(await checkSourceProject(join(root, 'src'))).map((issue) => issue.rule),
+        ).toContain('strict-fp/no-undefined');
       },
     );
   });
   it('reads no configuration when no ancestor declares one', async () => {
     await withProject({ 'src/a.ts': 'export const a=1;' }, async (root) =>
-      expect(await checkSourceProject(join(root, 'src'))).toEqual([]),
+      expect(success(await checkSourceProject(join(root, 'src')))).toEqual([]),
     );
   });
   it('exposes this repository configuration to the commit policy', () => {
@@ -57,7 +58,7 @@ describe('configuration discovery', () => {
         '--conditions=source',
         '--input-type=module',
         '-e',
-        'import { loadConfiguration } from "./packages/check/src/config-reader.b.ts"; console.log(JSON.stringify(loadConfiguration(process.cwd())));',
+        'import { loadConfiguration } from "./packages/check/src/config-reader.b.ts"; import {get,getError,isErr} from "./packages/fp/src/index.ts"; const result=loadConfiguration(process.cwd()); if(isErr(result)) throw new Error(JSON.stringify(getError(result))); console.log(JSON.stringify(get(result)));',
       ],
       { cwd: repository, encoding: 'utf8', windowsHide: true, timeout: 30000 },
     );

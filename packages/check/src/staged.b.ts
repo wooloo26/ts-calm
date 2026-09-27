@@ -1,5 +1,5 @@
 /**
- * @boundary Inspect a frozen Git index in an isolated temporary directory; leave the index and checkout untouched.
+ * @boundary Inspect a frozen Git index in a private directory and retain operation and cleanup failures.
  * @effects node:child_process
  * @effects node:fs
  * @effects node:os
@@ -7,148 +7,152 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
+import { completeWithCleanup, err, get, isErr, ok } from '@ts-calm/fp';
+import type { AsyncResult, Result } from '@ts-calm/fp';
+import { capture, captureResult, captureResultAsync } from '@ts-calm/fp/boundary';
 import { loadConfiguration } from '#src/config-reader.b';
 import { checkProject } from '#src/project';
 import { validateCommitMessage } from '#src/rules/commit-message';
+import { snapshotEntries, decodeBlobs } from '#src/snapshot';
+import type { SnapshotEntry } from '#src/snapshot';
+import { issue } from '#src/core/issues';
+import type { CheckFailure } from '#src/core/issues';
 import type { Diagnostic } from '#src/core/types';
 import { linkSnapshotDependencies } from '#src/dependency-snapshot.b';
 
-/** @impure Execute Git and collect its output. */
-const git = (root: string, args: readonly string[], input?: string): Buffer => {
-  const result = spawnSync('git', ['-C', root, ...args], {
-    maxBuffer: 512 * 1024 * 1024,
-    windowsHide: true,
-    ...(typeof input === 'string' ? { input } : {}),
-  });
-  if (result.error || result.status !== 0)
-    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-    throw new Error(result.error?.message ?? result.stderr.toString('utf8'));
-  return result.stdout;
-};
-
-type IndexEntry = Readonly<{ mode: string; object: string; path: string }>;
-
-const newline = 10;
-const modeKind = (mode: string): string =>
-  mode === '120000' ? 'symlink' : mode === '160000' ? 'submodule' : `entry of mode ${mode}`;
-
-const indexEntries = (index: string): readonly IndexEntry[] => {
-  const entries: IndexEntry[] = [];
-  for (const entry of index.split('\0').filter(Boolean)) {
-    const match = /^(\d+) ([0-9a-f]+) (\d)\t([\s\S]+)$/.exec(entry);
-    if (!match || match[3] !== '0')
-      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-      throw new Error('Resolve index conflicts before checking staged content.');
-    const mode = match[1] ?? '',
-      object = match[2] ?? '',
-      path = match[4] ?? '';
-    if (mode !== '100644' && mode !== '100755')
-      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-      throw new Error(
-        `A staged ${modeKind(mode)} cannot be inspected as a source snapshot: ${path}. Unstage it, or check the working tree instead.`,
-      );
-    entries.push({ mode, object, path });
-  }
-  return entries;
-};
-
-/** @impure Read every distinct staged blob in one Git invocation. */
-const blobs = (root: string, objects: readonly string[]): ReadonlyMap<string, Buffer> => {
-  const wanted = [...new Set(objects)];
-  const output = git(root, ['cat-file', '--batch'], `${wanted.join('\n')}\n`);
-  const contents = new Map<string, Buffer>();
-  let cursor = 0;
-  for (const object of wanted) {
-    const headerEnd = output.indexOf(newline, cursor);
-    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-    if (headerEnd < 0) throw new Error(`git cat-file --batch ended before ${object}.`);
-    const [oid = '', kind = '', size = ''] = output
-      .subarray(cursor, headerEnd)
-      .toString('utf8')
-      .split(' ');
-    const length = Number(size);
-    if (kind !== 'blob' || !Number.isSafeInteger(length) || oid !== object)
-      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-      throw new Error(`git cat-file did not return the staged blob ${object}.`);
-    contents.set(object, output.subarray(headerEnd + 1, headerEnd + 1 + length));
-    cursor = headerEnd + 1 + length + 1;
-  }
-  return contents;
-};
-
-/** @impure Read Git objects and write this invocation's snapshot. */
-const materialize = (root: string, temporary: string, index: string): readonly IndexEntry[] => {
-  const entries = indexEntries(index);
-  const contents = blobs(
-    root,
-    entries.map((entry) => entry.object),
+/** @impure Execute Git and return its exact output or an operational failure. */
+const git = (
+  root: string,
+  args: readonly string[],
+  input?: string,
+): Result<Buffer, CheckFailure> => {
+  const invoked = capture(
+    () =>
+      spawnSync('git', ['-C', root, ...args], {
+        maxBuffer: 512 * 1024 * 1024,
+        windowsHide: true,
+        ...(typeof input === 'string' ? { input } : {}),
+      }),
+    { name: `git:${args[0] ?? 'command'}` },
   );
-  for (const entry of entries) {
-    const destination = resolve(temporary, entry.path);
-    const within = relative(temporary, destination);
-    if (
-      !within ||
-      within === '..' ||
-      within.startsWith(`..${String.fromCharCode(92)}`) ||
-      within.startsWith('../') ||
-      isAbsolute(within)
-    )
-      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-      throw new Error(`Staged path escapes the snapshot: ${entry.path}`);
-    if (entry.path.split(/[\\/]/).some((part) => part === '.git' || part === 'node_modules'))
-      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-      throw new Error(`Do not stage repository internals or dependencies: ${entry.path}`);
-    const content = contents.get(entry.object);
-    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-    if (!content) throw new Error(`No staged content for ${entry.path}.`);
-    mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, content);
-    if (entry.mode === '100755') chmodSync(destination, 0o755);
-  }
-  return entries;
+  if (isErr(invoked)) return invoked;
+  const result = get(invoked);
+  return result.error || result.status !== 0
+    ? err(
+        issue(
+          'command-failed',
+          'git',
+          result.error?.message ||
+            result.stderr?.toString('utf8') ||
+            (result.signal ? `Git terminated by ${result.signal}.` : 'Git failed.'),
+        ),
+      )
+    : ok(result.stdout);
 };
 
-/**
- * Create a temporary index snapshot, invoke the inspection, and remove the snapshot again.
- *
- * @impure Reads Git objects and writes this invocation's snapshot.
- * @param root - Any directory inside the inspected Git repository.
- * @param inspect - Async inspection invoked with the snapshot root.
- * @returns The inspection result.
- * @throws If the index has conflicts, changes while checking, holds an entry that is not a
- * regular file, or holds an escaping path.
- */
+/** @impure Fetch staged blobs and materialize already validated paths. */
+const materialize = (
+  root: string,
+  temporary: string,
+  index: string,
+): Result<readonly SnapshotEntry[], CheckFailure> => {
+  const planned = snapshotEntries(temporary, index);
+  if (isErr(planned)) return planned;
+  const entries = get(planned),
+    objects = [...new Set(entries.map((entry) => entry.object))];
+  const output = git(root, ['cat-file', '--batch'], `${objects.join('\n')}\n`);
+  if (isErr(output)) return output;
+  const decoded = decodeBlobs(get(output), objects);
+  if (isErr(decoded)) return decoded;
+  const contents = get(decoded);
+  return captureResult(
+    () => {
+      for (const entry of entries) {
+        const content = contents.get(entry.object);
+        if (!content)
+          return err(
+            issue(
+              'invalid-snapshot',
+              'materialize-snapshot',
+              `No staged content for ${entry.path}.`,
+            ),
+          );
+        mkdirSync(dirname(entry.destination), { recursive: true });
+        writeFileSync(entry.destination, content);
+        if (entry.mode === '100755') chmodSync(entry.destination, 0o755);
+      }
+      return ok(entries);
+    },
+    { name: 'materialize-snapshot' },
+  );
+};
+
+/** @impure Materialize and inspect an owned snapshot, checking that the index remains frozen. */
+const inspectSnapshot = async <Value>(
+  context: Readonly<{ repository: string; directory: string; before: string }>,
+  inspect: (
+    snapshotRoot: string,
+  ) => Result<Value, CheckFailure> | PromiseLike<Result<Value, CheckFailure>>,
+): AsyncResult<Value, CheckFailure> => {
+  const { repository, directory, before } = context;
+  const prepared = materialize(repository, directory, before);
+  if (isErr(prepared)) return prepared;
+  const linked = linkSnapshotDependencies(
+    repository,
+    directory,
+    get(prepared)
+      .map((entry) => entry.path)
+      .filter((path) => /(?:^|\/)package\.json$/.test(path)),
+  );
+  if (isErr(linked)) return linked;
+  const result = await inspect(directory);
+  if (isErr(result)) return result;
+  const after = git(repository, ['ls-files', '--stage', '-z']);
+  if (isErr(after)) return after;
+  return before === get(after).toString('utf8')
+    ? result
+    : err(
+        issue('invalid-snapshot', 'inspect-snapshot', 'Git index changed while checking; retry.'),
+      );
+};
+
+/** @impure Create a private snapshot and always release it after the supplied Result-based inspection. */
 export const withStagedProject = async <Value>(
   root: string,
-  inspect: (snapshotRoot: string) => Promise<Value>,
-): Promise<Value> => {
-  const repository = git(root, ['rev-parse', '--show-toplevel']).toString('utf8').trim();
-  const before = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
-  const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-staged-'));
-  // @allow strict-fp/no-try -- Preserve unconditional cleanup and exception precedence required by this boundary API.
-  try {
-    const entries = materialize(repository, temporary, before);
-    linkSnapshotDependencies(
-      repository,
-      temporary,
-      entries.map((entry) => entry.path).filter((path) => /(?:^|\/)package\.json$/.test(path)),
-    );
-    const result = await inspect(temporary);
-    const after = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
-    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
-    if (before !== after) throw new Error('Git index changed while checking; retry.');
-    return result;
-  } finally {
-    rmSync(temporary, { recursive: true, force: true });
-  }
+  inspect: (
+    snapshotRoot: string,
+  ) => Result<Value, CheckFailure> | PromiseLike<Result<Value, CheckFailure>>,
+): AsyncResult<Value, CheckFailure> => {
+  const found = git(root, ['rev-parse', '--show-toplevel']);
+  if (isErr(found)) return found;
+  const repository = get(found).toString('utf8').trim();
+  const index = git(repository, ['ls-files', '--stage', '-z']);
+  if (isErr(index)) return index;
+  const created = capture(() => mkdtempSync(join(tmpdir(), 'ts-calm-staged-')), {
+    name: 'create-snapshot',
+  });
+  if (isErr(created)) return created;
+  const directory = get(created);
+  const result = await captureResultAsync(
+    () => inspectSnapshot({ repository, directory, before: get(index).toString('utf8') }, inspect),
+    { name: 'inspect-snapshot' },
+  );
+  const cleaned = capture(() => rmSync(directory, { recursive: true, force: true }), {
+    name: 'remove-snapshot',
+  });
+  return completeWithCleanup(result, [cleaned]);
 };
 
-/** @impure Inspect the Git index using external static tools. */
-export const checkStaged = (root: string): Promise<readonly Diagnostic[]> =>
+/** @impure Inspect every source in the frozen Git index. */
+export const checkStaged = (root: string): AsyncResult<readonly Diagnostic[], CheckFailure> =>
   withStagedProject(root, checkProject);
-/** @impure Read the staged commit policy and validate the supplied message. */
-export const checkStagedMessage = (root: string, message: string): Promise<readonly Diagnostic[]> =>
-  withStagedProject(root, (snapshot) =>
-    Promise.resolve(validateCommitMessage(message, loadConfiguration(snapshot))),
-  );
+/** @impure Load the staged policy and validate the supplied commit message. */
+export const checkStagedMessage = (
+  root: string,
+  message: string,
+): AsyncResult<readonly Diagnostic[], CheckFailure> =>
+  withStagedProject(root, (snapshot) => {
+    const config = loadConfiguration(snapshot);
+    return isErr(config) ? config : ok(validateCommitMessage(message, get(config)));
+  });
