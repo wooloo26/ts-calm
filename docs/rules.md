@@ -13,7 +13,7 @@ export const callback = (error: unknown, request: unknown, response: unknown, ne
 
 ## purity
 
-Declare I/O, time, randomness and shared-state effects with a leading @impure reason. Local mutation and loops are allowed; project calls and known fp callbacks propagate effects. Each root has 512 context expansions; purity/incomplete means some calls remain unproven. Unknown third-party behavior, getters, proxies, dynamic dispatch and recursive allocation factories are not proven pure. An annotation does not bypass other checks.
+Declare I/O, time, randomness and shared-state effects with a leading @impure reason. Local mutation and loops are allowed; project calls and known fp callbacks propagate effects. Each root has 512 context expansions; purity/incomplete reports exhausted budgets or unmodeled fp behavior. Unknown third-party behavior, getters, proxies, dynamic dispatch and recursive allocation factories are not proven pure. An annotation does not bypass other checks.
 
 ```ts
 /** @impure Read the system clock. */

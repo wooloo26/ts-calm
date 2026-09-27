@@ -13,7 +13,7 @@ export type Fault = Readonly<{
   operation: string;
   /** The exception message, or a description when the cause was not an `Error`. */
   message: string;
-  /** The original thrown value; it is kept for diagnostics and never inspected by the library. */
+  /** The original thrown value, retained unchanged for diagnostics. */
   cause: unknown;
 }>;
 /** How {@link capture} names the operation and optionally classifies its exception. */
@@ -27,7 +27,10 @@ export type CaptureOptions<Problem> = Readonly<{
 const faultMessage = (cause: unknown): string => {
   // @allow strict-fp/no-try -- Implement capture itself and its failure inspection; using capture here would recurse.
   try {
-    if (cause instanceof Error) return cause.message;
+    if (cause instanceof Error) {
+      const message: unknown = cause.message;
+      return typeof message === 'string' ? message : 'Unexpected non-string Error message';
+    }
     return typeof cause === 'string' ? cause : 'Unexpected non-Error failure';
   } catch {
     return 'Uninspectable failure';

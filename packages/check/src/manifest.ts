@@ -1,4 +1,4 @@
-import { err, get, isErr, isPlainObject, ok } from '@ts-calm/fp';
+import { err, get, isErr, isPlainObject, none, ok, some } from '@ts-calm/fp';
 import type { Result } from '@ts-calm/fp';
 import { capture } from '@ts-calm/fp/boundary';
 import { issue } from '#src/core/issues';
@@ -13,7 +13,20 @@ export type InitPlan = Readonly<{ content: string; result: InitResult }>;
 export const decodeManifest = (
   source: string,
 ): Result<Readonly<Record<string, unknown>>, CheckFailure> => {
-  const parsed = capture((): unknown => JSON.parse(source), { name: 'decode-package-manifest' });
+  const parsed = capture((): unknown => JSON.parse(source), {
+    name: 'decode-package-manifest',
+    classify: (cause) => {
+      if (!(cause instanceof SyntaxError)) return none();
+      const message: unknown = cause.message;
+      return some(
+        issue(
+          'invalid-manifest',
+          'decode-package-manifest',
+          typeof message === 'string' ? message : 'package.json contains invalid JSON.',
+        ),
+      );
+    },
+  });
   if (isErr(parsed)) return parsed;
   const value = get(parsed);
   return isPlainObject(value)

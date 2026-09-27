@@ -111,6 +111,14 @@ export const checkPurity = (
       names.push(functionLabel(project, fn));
       incomplete.set(fn.file, names);
     }
+    if (result.unsupported.size > 0)
+      diagnostics.push(
+        diagnostic(model.file.source, 'purity/incomplete', {
+          message: `Purity analysis is incomplete in ${functionLabel(project, fn)}: ${[...result.unsupported].join('; ')}.`,
+          offset: fn.start,
+          severity: 'warning',
+        }),
+      );
     if (fn.annotated && !fn.reason)
       diagnostics.push(
         diagnostic(model.file.source, 'purity/reason', {

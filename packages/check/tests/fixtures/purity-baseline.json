@@ -18,10 +18,11 @@
   {
     "file": "packages/check/src/rules/purity/eval.ts",
     "functions": [
+      "imported",
       "access",
       "access.<callback 1>",
       "bindingValue",
-      "bindingValue.<callback 4>",
+      "bindingValue.<callback 3>",
       "fresh",
       "fresh.<callback 1>",
       "resolveValue",
@@ -63,6 +64,21 @@
       "walkFunction.<callback 1>",
       "walkModel",
       "buildPurityModel"
+    ]
+  },
+  {
+    "file": "packages/check/src/rules/purity/retained.ts",
+    "functions": [
+      "read",
+      "read.<callback 1>",
+      "bindingValue",
+      "aggregate",
+      "application",
+      "application.<callback 3>",
+      "application.<callback 4>",
+      "expression",
+      "retainedBinding",
+      "retainedExport"
     ]
   },
   {

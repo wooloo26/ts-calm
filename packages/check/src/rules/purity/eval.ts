@@ -1,6 +1,14 @@
+import { retainedBinding, retainedExport } from '#src/rules/purity/retained';
 import { evaluateFp } from '#src/rules/purity/fp';
 import { record, text, offset, children, functionNode, effectName } from '#src/core/parser';
-import { property, unique, unknown, fnForExport, referenceShape } from '#src/rules/purity/values';
+import {
+  literalValue,
+  property,
+  unique,
+  unknown,
+  fnForExport,
+  referenceShape,
+} from '#src/rules/purity/values';
 import type { Node } from '#src/core/parser';
 import type { FunctionModel, PurityModel, Binding } from '#src/rules/purity/model';
 import { typeKind } from '#src/rules/purity/model';
@@ -92,12 +100,22 @@ const effect = (
   );
 };
 
+const retainedContext = (context: Context) => ({
+  project: context.project,
+  cache: context.evaluation.retained,
+  unsupported: context.evaluation.unsupported,
+});
+
+/** @impure Resolve and cache imported value origins for this invocation. */
 const imported = (context: Context, model: PurityModel, binding: Binding): readonly Value[] => {
   const target = context.project.targets.get(`${model.file.source.path}\0${binding.specifier}`);
   if (target)
     return binding.imported === '*'
       ? [{ kind: 'external', name: `project:${target}` }]
-      : fnForExport(context.project, target, { name: binding.imported });
+      : retainedExport(retainedContext(context), target, {
+          name: binding.imported,
+          seen: new Set(),
+        }) || fnForExport(context.project, target, { name: binding.imported });
   return [
     {
       kind: 'external',
@@ -106,11 +124,17 @@ const imported = (context: Context, model: PurityModel, binding: Binding): reado
   ];
 };
 
+/** @impure Resolve exported constants and retain their module ownership. */
 const access = (context: Context, values: readonly Value[], key: string): readonly Value[] =>
   unique(
     values.flatMap((value) => {
       if (value.kind === 'external' && value.name.startsWith('project:'))
-        return fnForExport(context.project, value.name.slice(8), { name: key });
+        return (
+          retainedExport(retainedContext(context), value.name.slice(8), {
+            name: key,
+            seen: new Set(),
+          }) || fnForExport(context.project, value.name.slice(8), { name: key })
+        );
       return property(value, key, context.project);
     }),
   );
@@ -133,34 +157,9 @@ const bindingValue = (
     return id ? [{ kind: 'function' as const, id }] : [];
   });
   if (declared.length) return declared;
-  if (!binding.mutable && !frame.active.has(binding.owner) && !seen.has(binding.id)) {
-    for (const initial of binding.values) {
-      if (initial['type'] !== 'CallExpression') continue;
-      const callee = record(initial['callee']);
-      if (
-        callee['type'] !== 'Identifier' &&
-        !(
-          callee['type'] === 'MemberExpression' && record(callee['object'])['type'] === 'Identifier'
-        )
-      )
-        continue;
-      const targets = resolveValue(context, frame, {
-        node: callee,
-        seen: new Set([...seen, binding.id]),
-      });
-      if (
-        targets.some((value) => value.kind === 'external' && value.name === '@ts-calm/fp:branded')
-      )
-        return [
-          {
-            kind: 'decoder',
-            callbacks: resolveValue(context, frame, {
-              node: nodes(initial['arguments'])[1] ?? {},
-              seen: new Set([...seen, binding.id]),
-            }),
-          },
-        ];
-    }
+  if (!binding.mutable && binding.owner === model.module) {
+    const retained = retainedBinding(retainedContext(context), model, binding);
+    if (retained) return retained;
   }
   if (
     !binding.parameter &&
@@ -250,6 +249,9 @@ export const resolveValue = (
   const model = modelFor(context, frame);
   if (!model) return [unknown];
   const kind = text(node, 'type');
+  if (kind === 'Literal') {
+    return [literalValue(node['value'])];
+  }
   if (functionNode(node)) {
     const id = model.functionNodes.get(offset(node));
     return id ? [{ kind: 'function', id }] : [unknown];
@@ -269,6 +271,7 @@ export const resolveValue = (
   if (
     [
       'TSAsExpression',
+      'TSSatisfiesExpression',
       'TSTypeAssertion',
       'TSNonNullExpression',
       'AwaitExpression',
@@ -306,8 +309,14 @@ const write = (
     bindingAssignment = false,
   }: Readonly<{ values: readonly Value[]; node: Node; bindingAssignment?: boolean }>,
 ): void => {
-  for (const value of values)
-    if (value.kind === 'reference') {
+  for (const original of values) {
+    const value =
+      original.kind === 'reference'
+        ? original
+        : original.kind === 'fresh' && original.owner
+          ? { kind: 'reference' as const, id: original.owner, path: [], shape: original.shape }
+          : false;
+    if (value) {
       const binding = context.project.bindings.get(value.id);
       if (bindingAssignment && binding?.owner === frame.fn.id) continue;
       context.evaluation.writes.add(value.id);
@@ -317,6 +326,7 @@ const write = (
         ...(value.id ? { binding: value.id } : {}),
       });
     }
+  }
 };
 
 /** @impure Observe mutable external reads without claiming ordinary input reads are effects. */
@@ -331,9 +341,10 @@ const read = (context: Context, frame: Frame, node: Node): void => {
       )
         effect(context, frame, { message: `read ${name}`, node });
     }
-    if (value.kind === 'reference') {
-      const binding = context.project.bindings.get(value.id);
-      context.evaluation.reads.add(value.id);
+    const owner = value.kind === 'reference' ? value.id : value.kind === 'fresh' ? value.owner : '';
+    if (owner) {
+      const binding = context.project.bindings.get(owner);
+      context.evaluation.reads.add(owner);
       if (binding && !binding.parameter && (binding.mutable || context.changed.has(binding.id)))
         effect(context, frame, {
           message: `read changing ${binding.name}`,
@@ -374,7 +385,7 @@ const invoke = (
               call: (callbacks, inputs) =>
                 invoke(context, frame, { values: callbacks, args: inputs, node }),
               read: (values, key) => access(context, values, key),
-              allocate: (shape, slots) => [
+              allocate: (shape, slots, discriminator = '') => [
                 {
                   kind: 'fresh',
                   id:
@@ -386,12 +397,18 @@ const invoke = (
                     ':fp:' +
                     offset(node) +
                     ':' +
-                    shape,
+                    shape +
+                    ':' +
+                    discriminator,
                   shape,
                   slots: new Map(Object.entries(slots)),
                   spread: [],
                 },
               ],
+              /** @impure Record an unsupported external fp contract. */
+              incomplete: (reason) => {
+                context.evaluation.unsupported.add(reason);
+              },
             });
           return [{ kind: 'external' as const, name: `${name}()` }];
         }
@@ -848,6 +865,8 @@ export const evaluatePurity = (
     revision: 0,
     reads: new Set(),
     incomplete: false,
+    unsupported: new Set(),
+    retained: new Map(),
   };
   const context = { project, evaluation, root: fn.id, changed, maximumExpansions };
   evaluateFunction(context, fn.id);
@@ -867,5 +886,6 @@ export const evaluatePurity = (
   evaluation.activeCalls.clear();
   evaluation.summaries.clear();
   evaluation.pending.clear();
+  evaluation.retained.clear();
   return evaluation;
 };

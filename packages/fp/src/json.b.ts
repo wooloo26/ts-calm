@@ -26,10 +26,6 @@ export type JsonIssue = Readonly<{
 }>;
 
 type PendingValue = Readonly<{ value: unknown; leaving: boolean }>;
-const fault = (code: JsonIssue['code'], fallback: string, cause: unknown): JsonIssue => ({
-  code,
-  message: cause instanceof Error ? cause.message : fallback,
-});
 const checkJsonValue = (input: unknown): Result<Unit, JsonIssue> => {
   const pending: PendingValue[] = [{ value: input, leaving: false }];
   const ancestors = new Set<object>();
@@ -98,8 +94,7 @@ const serializeDto = (value: JsonValue): Result<string, JsonIssue> => {
     { name: 'serializeDto' },
   );
   if (isErr(captured)) {
-    const cause = getError(captured).cause;
-    return err(fault('serialization-failed', 'JSON serialization failed', cause));
+    return err({ code: 'serialization-failed', message: getError(captured).message });
   }
   return get(captured);
 };
@@ -130,11 +125,7 @@ const parseJson = (text: string): Result<unknown, JsonIssue> => {
     { name: 'parseJson' },
   );
   if (isErr(captured)) {
-    const cause = getError(captured).cause;
-    return err({
-      code: 'invalid-json',
-      message: cause instanceof Error ? cause.message : 'JSON parsing failed',
-    });
+    return err({ code: 'invalid-json', message: getError(captured).message });
   }
   return get(captured);
 };
@@ -197,8 +188,7 @@ export const formatDiagnostic = (value: unknown, space?: number): Result<string,
     { name: 'formatDiagnostic' },
   );
   if (isErr(captured)) {
-    const cause = getError(captured).cause;
-    return err(fault('serialization-failed', 'JSON serialization failed', cause));
+    return err({ code: 'serialization-failed', message: getError(captured).message });
   }
   return get(captured);
 };

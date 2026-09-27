@@ -1,4 +1,4 @@
-import { expect, it, expectTypeOf } from 'vitest';
+import { expect, it, expectTypeOf, vi } from 'vitest';
 import { join, resolve } from 'node:path';
 import { getError, isErr } from '@ts-calm/fp';
 import type { AsyncResult, Result } from '@ts-calm/fp';
@@ -70,6 +70,9 @@ it.each([
     });
 });
 it('decodes manifests and computes initialization without filesystem access', () => {
+  const syntax = decodeManifest('{');
+  expect(isErr(syntax)).toBe(true);
+  if (isErr(syntax)) expect(getError(syntax).code).toBe('invalid-manifest');
   expect(failureText(decodeManifest('[]'))).toContain('must contain an object');
   expect(isErr(decodeManifest('{'))).toBe(true);
   expect(success(planInitialization('')).result.created).toEqual(['package.json']);
@@ -210,4 +213,27 @@ it('reads guarded configuration properties once before constructing their typed 
   expect(decoded.rules?.['commit-message']).toEqual({ ascii: true });
   expect(decoded.overrides).toEqual([]);
   expect([asciiReads, overrideReads]).toEqual([1, 1]);
+});
+
+it('preserves unexpected JSON parser failures as Faults', () => {
+  const cause = new Error('parser malfunction');
+  vi.spyOn(JSON, 'parse').mockImplementationOnce(() => {
+    throw cause;
+  });
+  const result = decodeManifest('{}');
+  expect(isErr(result)).toBe(true);
+  if (isErr(result)) expect(getError(result)).toMatchObject({ code: 'unexpected-fault', cause });
+});
+it('normalizes a malformed SyntaxError message in a manifest issue', () => {
+  const cause = Object.defineProperty(new SyntaxError(), 'message', { value: 42 });
+  vi.spyOn(JSON, 'parse').mockImplementationOnce(() => {
+    throw cause;
+  });
+  const result = decodeManifest('{}');
+  expect(isErr(result)).toBe(true);
+  if (isErr(result))
+    expect(getError(result)).toMatchObject({
+      code: 'invalid-manifest',
+      message: 'package.json contains invalid JSON.',
+    });
 });

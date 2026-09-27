@@ -9,9 +9,12 @@ export type FreshValue = Readonly<{
   shape: string;
   slots: Map<string, readonly Value[]>;
   spread: Value[];
+  /** A module-owned allocation is shared even though its slots are statically known. */
+  owner?: string;
 }>;
 export type Value =
   | Readonly<{ kind: 'unknown'; shape?: string }>
+  | Readonly<{ kind: 'literal'; value: 'ok' | 'error' | boolean }>
   | Readonly<{ kind: 'function'; id: string }>
   | Readonly<{ kind: 'external'; name: string }>
   | Readonly<{ kind: 'reference'; id: string; path: readonly string[]; shape: string }>
@@ -68,6 +71,8 @@ export type Evaluation = {
   revision: number;
   reads: Set<string>;
   incomplete: boolean;
+  unsupported: Set<string>;
+  retained: Map<string, readonly Value[]>;
 };
 export type Project = Readonly<{
   models: ReadonlyMap<string, PurityModel>;
@@ -79,20 +84,27 @@ export type Project = Readonly<{
   declared: ReadonlySet<string>;
 }>;
 export const unknown: Value = { kind: 'unknown' };
+/** Only DTO discriminants need literal precision; other primitives keep the existing coarse model. */
+export const literalValue = (value: unknown): Value =>
+  value === 'ok' || value === 'error' || typeof value === 'boolean'
+    ? { kind: 'literal', value }
+    : unknown;
 export const valueKey = (value: Value, depth = 0): string =>
   depth > 8
     ? '?'
-    : value.kind === 'container'
-      ? `${value.variant}(${value.payload.map((item) => valueKey(item, depth + 1)).join(',')})`
-      : value.kind === 'decoder' || value.kind === 'decoder-call'
-        ? `${value.kind}(${value.callbacks.map((item) => valueKey(item, depth + 1)).join(',')})`
-        : value.kind === 'reference'
-          ? `${value.id}.${value.path.join('.')}`
-          : value.kind === 'function' || value.kind === 'fresh'
-            ? value.id
-            : value.kind === 'external'
-              ? value.name
-              : `?${value.shape ?? ''}`;
+    : value.kind === 'literal'
+      ? `literal:${JSON.stringify(value.value)}`
+      : value.kind === 'container'
+        ? `${value.variant}(${value.payload.map((item) => valueKey(item, depth + 1)).join(',')})`
+        : value.kind === 'decoder' || value.kind === 'decoder-call'
+          ? `${value.kind}(${value.callbacks.map((item) => valueKey(item, depth + 1)).join(',')})`
+          : value.kind === 'reference'
+            ? `${value.id}.${value.path.join('.')}`
+            : value.kind === 'function' || value.kind === 'fresh'
+              ? value.id
+              : value.kind === 'external'
+                ? value.name
+                : `?${value.shape ?? ''}`;
 export const unique = (values: readonly Value[]): readonly Value[] => {
   if (values.length < 2) return values;
   const seen = new Map<string, Value>();
