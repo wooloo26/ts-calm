@@ -1,6 +1,5 @@
 /**
  * @boundary Convert dependency exceptions and classifier defects into explicit Result failures.
- * @allow strict-fp/no-try -- Catch only at the supplied operation and classifier boundary.
  */
 import { err, get, isErr, isSome, none, ok } from './containers.ts';
 import type { AsyncResult, Option, Result } from './containers.ts';
@@ -26,6 +25,7 @@ export type CaptureOptions<Problem> = Readonly<{
 }>;
 
 const faultMessage = (cause: unknown): string => {
+  // @allow strict-fp/no-try -- Implement capture itself and its failure inspection; using capture here would recurse.
   try {
     if (cause instanceof Error) return cause.message;
     return typeof cause === 'string' ? cause : 'Unexpected non-Error failure';
@@ -43,6 +43,7 @@ const classifyFailure = <Problem>(
   cause: unknown,
   options: CaptureOptions<Problem>,
 ): Result<never, Problem | Fault> => {
+  // @allow strict-fp/no-try -- Implement capture itself and its failure inspection; using capture here would recurse.
   try {
     const classified = options.classify ? options.classify(cause) : none();
     return isSome(classified) ? err(get(classified)) : err(unexpected(options.name, cause));
@@ -63,6 +64,7 @@ export const capture = <Value = never, Problem = never>(
   operation: () => Synchronous<Value>,
   options: CaptureOptions<Problem>,
 ): Result<Value, Problem | Fault> => {
+  // @allow strict-fp/no-try -- Implement capture itself and its failure inspection; using capture here would recurse.
   try {
     return ok(operation());
   } catch (cause) {
@@ -81,6 +83,7 @@ export const captureAsync = async <Value = never, Problem = never>(
   operation: () => PromiseLike<Value>,
   options: CaptureOptions<Problem>,
 ): AsyncResult<Value, Problem | Fault> => {
+  // @allow strict-fp/no-try -- Implement capture itself and its failure inspection; using capture here would recurse.
   try {
     return ok(await operation());
   } catch (cause) {

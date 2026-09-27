@@ -16,7 +16,7 @@ const tsconfig = JSON.stringify({
 });
 const base = { 'tsconfig.json': tsconfig };
 const ownedRule =
-  /^(?:commit-message|function-length|boundary|no-file-cycles|no-module-cycles|strict-fp|purity)(?:\/|$)/;
+  /^(?:commit-message|function-length|function-params|boundary|no-file-cycles|no-module-cycles|strict-fp|purity)(?:\/|$)/;
 const onlyOwnedRules = (issues: readonly { rule: string }[]): boolean =>
   issues.every((issue) => ownedRule.test(issue.rule));
 
@@ -37,12 +37,12 @@ describe('complete static checking', () => {
       },
     );
   });
-  it('deduplicates overlapping checks and honors narrow and broad boundary exceptions', async () => {
-    for (const allowance of ['no-any', '*'])
+  it('deduplicates overlapping checks and honors exact line boundary exceptions', async () => {
+    for (const allowance of ['no-any'])
       await withProject(
         {
           ...base,
-          'src/adapter.b.ts': `/**\n * @boundary Adapt an external untyped callback shape.\n * @allow strict-fp/${allowance} -- External callback type cannot be expressed here.\n */\nexport const adapter=(value:any)=>value;`,
+          'src/adapter.b.ts': `/**\n * @boundary Adapt an external untyped callback shape.\n */\n// @allow strict-fp/${allowance} -- External callback type cannot be expressed here.\nexport const adapter=(value:any)=>value;`,
         },
         async (root) => expect(await checkProject(root)).toEqual([]),
       );

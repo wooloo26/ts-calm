@@ -1,9 +1,8 @@
 /**
  * @boundary Adapt collection membership and validated decoder output into precise nominal types.
- * @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
- * @allow strict-fp/no-try -- A native Map brand probe rejects dictionaries without invoking their properties.
  */
 import { get, isErr, none, ok, some } from './containers.ts';
+import { capture } from './capture.b.ts';
 import type { Option, Result } from './containers.ts';
 import type { NonEmptyReadonlyArray } from './contracts.ts';
 
@@ -29,6 +28,7 @@ export const branded = <const Name extends string, Input, Value, Problem>(
 ): Readonly<{ parse: (input: Input) => Result<Brand<Value, Name>, Problem> }> => {
   const parse = (input: Input): Result<Brand<Value, typeof name>, Problem> => {
     const decoded = decoder(input);
+    // @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
     return isErr(decoded) ? decoded : ok(get(decoded) as Brand<Value, typeof name>);
   };
   return Object.freeze({ parse });
@@ -40,10 +40,11 @@ export const branded = <const Name extends string, Input, Value, Problem>(
  * @param values - The array to inspect; the view is returned, not copied.
  * @returns `Some` with the same array viewed as non-empty, or `None` for an empty or sparse array.
  */
-export const nonEmpty = <Value>(values: readonly Value[]): Option<NonEmptyReadonlyArray<Value>> =>
-  values.length > 0 && Object.hasOwn(values, 0)
-    ? some(values as NonEmptyReadonlyArray<Value>)
-    : none();
+export const nonEmpty = <Value>(values: readonly Value[]): Option<NonEmptyReadonlyArray<Value>> => {
+  if (!values.length || !Object.hasOwn(values, 0)) return none();
+  // @allow strict-fp/no-assertion -- Membership proves the nonempty tuple; TypeScript does not narrow array length into a tuple.
+  return some(values as NonEmptyReadonlyArray<Value>);
+};
 
 /**
  * Read one array position without reading beyond its bounds.
@@ -55,9 +56,9 @@ export const nonEmpty = <Value>(values: readonly Value[]): Option<NonEmptyReadon
 export const at = <Value>(values: readonly Value[], index: number): Option<Value> => {
   if (!Number.isInteger(index)) return none();
   const position = index < 0 ? values.length + index : index;
-  return position >= 0 && position < values.length && Object.hasOwn(values, position)
-    ? some(values[position] as Value)
-    : none();
+  if (position < 0 || position >= values.length || !Object.hasOwn(values, position)) return none();
+  // @allow strict-fp/no-assertion -- The bounds and own-property check prove membership even when a stored value is undefined.
+  return some(values[position] as Value);
 };
 
 /**
@@ -96,9 +97,13 @@ export function lookup<Key, Value>(
   key: Key | PropertyKey,
 ): Option<Value> {
   if (isReadonlyMap(values))
+    // @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
     return values.has(key as Key) ? some(values.get(key as Key) as Value) : none();
+  // @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
   const record = values as Readonly<Record<PropertyKey, Value>>;
+  // @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
   const property = key as PropertyKey;
+  // @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
   return Object.hasOwn(record, property) ? some(record[property] as Value) : none();
 }
 
@@ -107,15 +112,12 @@ const isReadonlyMap = <Key, Value>(
 ): values is ReadonlyMap<Key, Value> => nativeMap(values);
 
 const nativeMap = (value: object): boolean => {
-  try {
-    Map.prototype.has.call(value, value);
-    return true;
-  } catch {
-    return false;
-  }
+  const probed = capture(() => Map.prototype.has.call(value, value), { name: 'native-map' });
+  return !isErr(probed);
 };
 
 export const ownEntries = <Value>(
   values: Readonly<Record<PropertyKey, Value>>,
 ): readonly (readonly [PropertyKey, Value])[] =>
+  // @allow strict-fp/no-assertion -- Runtime membership guards and public overloads establish the asserted relationship.
   Reflect.ownKeys(values).map((key) => [key, values[key] as Value]);

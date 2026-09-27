@@ -1,6 +1,6 @@
-import { record, text, children } from '#src/core/parser.b';
+import { record, text, children } from '#src/core/parser';
 import { typeKind } from '#src/rules/purity/model';
-import type { Node } from '#src/core/parser.b';
+import type { Node } from '#src/core/parser';
 import type { PurityModel, FunctionModel, Binding } from '#src/rules/purity/model';
 
 export type FreshValue = Readonly<{
@@ -90,33 +90,33 @@ export const unique = (values: readonly Value[]): readonly Value[] => {
 const expand = (
   node: Node,
   model: PurityModel,
-  project: Project,
-  seen = new Set<string>(),
+  { project, seen = new Set<string>() }: Readonly<{ project: Project; seen?: Set<string> }>,
 ): Readonly<{ node: Node; model: PurityModel }> => {
   if (node['type'] === 'TSTypeAnnotation' || node['type'] === 'TSTypeOperator')
-    return expand(record(node['typeAnnotation']), model, project, seen);
+    return expand(record(node['typeAnnotation']), model, { project, seen });
   const name = text(record(node['typeName']), 'name');
   const key = `${model.file.source.path}:${name}`;
   if (['Readonly', 'Partial', 'Required'].includes(name)) {
     const parameters = record(node['typeArguments'] ?? node['typeParameters']);
     const first = children(parameters)[0]?.node;
-    if (first) return expand(first, model, project, seen);
+    if (first) return expand(first, model, { project, seen });
   }
   if (name && !seen.has(key)) {
     if (model.typeDefs.has(name))
-      return expand(model.typeDefs.get(name) ?? {}, model, project, new Set([...seen, key]));
+      return expand(model.typeDefs.get(name) ?? {}, model, {
+        project,
+        seen: new Set([...seen, key]),
+      });
     const imported = model.importsByName.get(name);
     const target = imported
       ? project.targets.get(`${model.file.source.path}\0${imported.specifier}`)
       : '';
     const other = target ? project.models.get(target) : false;
     if (other && imported)
-      return expand(
-        other.typeDefs.get(imported.imported) ?? {},
-        other,
+      return expand(other.typeDefs.get(imported.imported) ?? {}, other, {
         project,
-        new Set([...seen, key]),
-      );
+        seen: new Set([...seen, key]),
+      });
   }
   return { node, model };
 };
@@ -124,21 +124,20 @@ const expand = (
 export const referenceShape = (
   binding: Binding,
   path: readonly string[],
-  model: PurityModel,
-  project: Project,
+  { model, project }: Readonly<{ model: PurityModel; project: Project }>,
 ): string => {
-  let current = expand(binding.annotation, model, project);
+  let current = expand(binding.annotation, model, { project });
   for (const key of path) {
     if (typeKind(current.node) === 'array' && (key === '*' || /^\d+$/.test(key))) {
       const argumentsNode = record(current.node['typeArguments'] ?? current.node['typeParameters']);
       const element = record(current.node['elementType'] ?? children(argumentsNode)[0]?.node);
-      current = expand(element, current.model, project);
+      current = expand(element, current.model, { project });
       continue;
     }
     const property = children(current.node)
       .map((entry) => entry.node)
       .find((entry) => text(record(entry['key']), 'name') === key);
-    current = expand(record(property?.['typeAnnotation']), current.model, project);
+    current = expand(record(property?.['typeAnnotation']), current.model, { project });
   }
   return typeKind(current.node) || (path.length === 0 ? binding.type : '');
 };
@@ -156,7 +155,10 @@ export const property = (value: Value, key: string, project: Project): readonly 
       {
         ...value,
         path,
-        shape: binding && ownerModel ? referenceShape(binding, path, ownerModel, project) : '',
+        shape:
+          binding && ownerModel
+            ? referenceShape(binding, path, { model: ownerModel, project })
+            : '',
       },
     ];
   }
@@ -180,8 +182,7 @@ export const property = (value: Value, key: string, project: Project): readonly 
 export const fnForExport = (
   project: Project,
   path: string,
-  name: string,
-  seen = new Set<string>(),
+  { name, seen = new Set<string>() }: Readonly<{ name: string; seen?: Set<string> }>,
 ): readonly Value[] => {
   const key = `${path}:${name}`;
   if (seen.has(key)) return [unknown];
@@ -200,17 +201,19 @@ export const fnForExport = (
     if (functions.length) return functions;
     if (binding?.specifier) {
       const destination = project.targets.get(`${path}\0${binding.specifier}`);
-      if (destination) return fnForExport(project, destination, binding.imported, next);
+      if (destination)
+        return fnForExport(project, destination, { name: binding.imported, seen: next });
     }
   }
   if (target?.specifier) {
     const destination = project.targets.get(`${path}\0${target.specifier}`);
-    if (destination) return fnForExport(project, destination, target.name ?? name, next);
+    if (destination)
+      return fnForExport(project, destination, { name: target.name ?? name, seen: next });
   }
   for (const star of model.stars) {
     const destination = project.targets.get(`${path}\0${star.specifier}`);
     if (destination) {
-      const found = fnForExport(project, destination, name, next);
+      const found = fnForExport(project, destination, { name, seen: next });
       if (found.some((value) => value.kind !== 'unknown')) return found;
     }
   }

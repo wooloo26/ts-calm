@@ -52,16 +52,16 @@ export const checkNoModuleCycles = (
           reported.add(key);
           const witnesses = [...trail.slice(start), edge].map((step) => {
             const origin = sources.get(step.from);
-            const line = origin ? diagnostic(origin, '', '', step.offset).line : 1;
+            const line = origin
+              ? diagnostic(origin, '', { message: '', offset: step.offset }).line
+              : 1;
             return `${step.from}:${line} -> ${step.to}`;
           });
           diagnostics.push({
-            ...diagnostic(
-              source,
-              'no-module-cycles',
-              `Directory cycle: ${[...cycle, edge.target].join(' -> ')}`,
-              edge.offset,
-            ),
+            ...diagnostic(source, 'no-module-cycles', {
+              message: `Directory cycle: ${[...cycle, edge.target].join(' -> ')}`,
+              offset: edge.offset,
+            }),
             help: witnesses.join('\n'),
           });
         }

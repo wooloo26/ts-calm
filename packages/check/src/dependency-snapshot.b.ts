@@ -1,7 +1,6 @@
 /**
  * @boundary Build a dependency view whose workspace links stay inside the staged snapshot.
  * @effects node:fs
- * @allow strict-fp/no-throw -- Missing staged workspace packages must never fall back to live sources.
  */
 import {
   existsSync,
@@ -59,6 +58,7 @@ export const linkSnapshotDependencies = (
       const local = relative(repository, original).replaceAll('\\', '/');
       const workspace = inside(repository, original) && !local.split('/').includes('node_modules');
       if (workspace && !staged.has(local || '.'))
+        // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
         throw new Error(
           `Workspace dependency ${name} is missing from the staged snapshot: ${local}.`,
         );

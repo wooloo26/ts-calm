@@ -1,6 +1,6 @@
-import { record, text, offset, children, functionNode, effectName } from '#src/core/parser.b';
+import { record, text, offset, children, functionNode, effectName } from '#src/core/parser';
 import { property, unique, unknown, fnForExport, referenceShape } from '#src/rules/purity/values';
-import type { Node } from '#src/core/parser.b';
+import type { Node } from '#src/core/parser';
 import type { FunctionModel, PurityModel, Binding } from '#src/rules/purity/model';
 import { typeKind } from '#src/rules/purity/model';
 import { summaryContext, reusableReturn, sameValues } from '#src/rules/purity/summaries';
@@ -97,9 +97,7 @@ const modelFor = (context: Context, frame: Frame): PurityModel | false =>
 const effect = (
   context: Context,
   frame: Frame,
-  message: string,
-  node: Node,
-  binding?: string,
+  { message, node, binding }: Readonly<{ message: string; node: Node; binding?: string }>,
 ): void => {
   const item = {
     message,
@@ -119,7 +117,7 @@ const imported = (context: Context, model: PurityModel, binding: Binding): reado
   if (target)
     return binding.imported === '*'
       ? [{ kind: 'external', name: `project:${target}` }]
-      : fnForExport(context.project, target, binding.imported);
+      : fnForExport(context.project, target, { name: binding.imported });
   return [
     {
       kind: 'external',
@@ -132,7 +130,7 @@ const access = (context: Context, values: readonly Value[], key: string): readon
   unique(
     values.flatMap((value) => {
       if (value.kind === 'external' && value.name.startsWith('project:'))
-        return fnForExport(context.project, value.name.slice(8), key);
+        return fnForExport(context.project, value.name.slice(8), { name: key });
       return property(value, key, context.project);
     }),
   );
@@ -141,9 +139,11 @@ const access = (context: Context, values: readonly Value[], key: string): readon
 const bindingValue = (
   context: Context,
   frame: Frame,
-  model: PurityModel,
-  binding: Binding,
-  seen: ReadonlySet<string>,
+  {
+    model,
+    binding,
+    seen,
+  }: Readonly<{ model: PurityModel; binding: Binding; seen: ReadonlySet<string> }>,
 ): readonly Value[] => {
   const provided = frame.env.get(binding.id);
   if (provided) return provided;
@@ -162,7 +162,11 @@ const bindingValue = (
     const alias = binding.values.find((node) => node['type'] === 'Identifier');
     const original = alias ? model.bindings.get(model.refs.get(offset(alias)) ?? '') : false;
     if (original)
-      return bindingValue(context, frame, model, original, new Set([...seen, binding.id]));
+      return bindingValue(context, frame, {
+        model,
+        binding: original,
+        seen: new Set([...seen, binding.id]),
+      });
   }
   if (binding.parameter || !frame.active.has(binding.owner))
     return [
@@ -170,13 +174,13 @@ const bindingValue = (
         kind: 'reference',
         id: binding.id,
         path: [],
-        shape: referenceShape(binding, [], model, context.project),
+        shape: referenceShape(binding, [], { model, project: context.project }),
       },
     ];
   if (seen.has(binding.id)) return [unknown];
   let values = unique(
     binding.values.flatMap((node) =>
-      resolveValue(context, frame, node, new Set([...seen, binding.id])),
+      resolveValue(context, frame, { node, seen: new Set([...seen, binding.id]) }),
     ),
   );
   for (const key of binding.projection) values = access(context, values, key);
@@ -187,8 +191,7 @@ const bindingValue = (
 const fresh = (
   context: Context,
   frame: Frame,
-  node: Node,
-  seen: ReadonlySet<string>,
+  { node, seen }: Readonly<{ node: Node; seen: ReadonlySet<string> }>,
 ): readonly Value[] => {
   const owner = modelFor(context, frame);
   const scope = owner ? (owner.nodeOwners.get(offset(node)) ?? frame.fn.id) : frame.fn.id;
@@ -209,17 +212,21 @@ const fresh = (
   if (kind === 'ArrayExpression')
     nodes(node['elements']).forEach((item, index) => {
       if (item['type'] === 'SpreadElement')
-        value.spread.push(...resolveValue(context, frame, record(item['argument']), seen));
-      else value.slots.set(String(index), resolveValue(context, frame, item, seen));
+        value.spread.push(
+          ...resolveValue(context, frame, { node: record(item['argument']), seen }),
+        );
+      else value.slots.set(String(index), resolveValue(context, frame, { node: item, seen }));
     });
   if (kind === 'ObjectExpression')
     for (const item of nodes(node['properties'])) {
       if (item['type'] === 'SpreadElement')
-        value.spread.push(...resolveValue(context, frame, record(item['argument']), seen));
+        value.spread.push(
+          ...resolveValue(context, frame, { node: record(item['argument']), seen }),
+        );
       else
         value.slots.set(
           keyOf(record(item['key'])),
-          resolveValue(context, frame, record(item['value']), seen),
+          resolveValue(context, frame, { node: record(item['value']), seen }),
         );
     }
   return [value];
@@ -229,8 +236,7 @@ const fresh = (
 export const resolveValue = (
   context: Context,
   frame: Frame,
-  node: Node,
-  seen: ReadonlySet<string> = new Set(),
+  { node, seen = new Set() }: Readonly<{ node: Node; seen?: ReadonlySet<string> }>,
 ): readonly Value[] => {
   const model = modelFor(context, frame);
   if (!model) return [unknown];
@@ -242,13 +248,13 @@ export const resolveValue = (
   if (kind === 'Identifier') {
     const binding = model.bindings.get(model.refs.get(offset(node)) ?? '');
     return binding
-      ? bindingValue(context, frame, model, binding, seen)
+      ? bindingValue(context, frame, { model, binding, seen })
       : [{ kind: 'external', name: text(node, 'name') }];
   }
   if (kind === 'MemberExpression')
     return access(
       context,
-      resolveValue(context, frame, record(node['object']), seen),
+      resolveValue(context, frame, { node: record(node['object']), seen }),
       node['computed'] ? literalKey(record(node['property'])) : keyOf(record(node['property'])),
     );
   if (
@@ -260,21 +266,24 @@ export const resolveValue = (
       'ChainExpression',
     ].includes(kind)
   )
-    return resolveValue(context, frame, record(node['expression'] ?? node['argument']), seen);
+    return resolveValue(context, frame, {
+      node: record(node['expression'] ?? node['argument']),
+      seen,
+    });
   if (kind === 'ConditionalExpression')
     return unique([
-      ...resolveValue(context, frame, record(node['consequent']), seen),
-      ...resolveValue(context, frame, record(node['alternate']), seen),
+      ...resolveValue(context, frame, { node: record(node['consequent']), seen }),
+      ...resolveValue(context, frame, { node: record(node['alternate']), seen }),
     ]);
   if (kind === 'LogicalExpression')
     return unique([
-      ...resolveValue(context, frame, record(node['left']), seen),
-      ...resolveValue(context, frame, record(node['right']), seen),
+      ...resolveValue(context, frame, { node: record(node['left']), seen }),
+      ...resolveValue(context, frame, { node: record(node['right']), seen }),
     ]);
   if (['ArrayExpression', 'ObjectExpression'].includes(kind))
-    return fresh(context, frame, node, seen);
+    return fresh(context, frame, { node, seen });
   if (kind === 'CallExpression' || kind === 'NewExpression')
-    return call(context, frame, node, seen);
+    return call(context, frame, { node, seen });
   return [unknown];
 };
 
@@ -282,28 +291,28 @@ export const resolveValue = (
 const write = (
   context: Context,
   frame: Frame,
-  values: readonly Value[],
-  node: Node,
-  bindingAssignment = false,
+  {
+    values,
+    node,
+    bindingAssignment = false,
+  }: Readonly<{ values: readonly Value[]; node: Node; bindingAssignment?: boolean }>,
 ): void => {
   for (const value of values)
     if (value.kind === 'reference') {
       const binding = context.project.bindings.get(value.id);
       if (bindingAssignment && binding?.owner === frame.fn.id) continue;
       context.evaluation.writes.add(value.id);
-      effect(
-        context,
-        frame,
-        `modify ${binding?.name ?? value.id}${value.path.length ? `.${value.path.join('.')}` : ''}`,
+      effect(context, frame, {
+        message: `modify ${binding?.name ?? value.id}${value.path.length ? `.${value.path.join('.')}` : ''}`,
         node,
-        value.id,
-      );
+        ...(value.id ? { binding: value.id } : {}),
+      });
     }
 };
 
 /** @impure Observe mutable external reads without claiming ordinary input reads are effects. */
 const read = (context: Context, frame: Frame, node: Node): void => {
-  for (const value of resolveValue(context, frame, node)) {
+  for (const value of resolveValue(context, frame, { node })) {
     if (value.kind === 'external') {
       const name = value.name.replace(/^globalThis\./, '');
       if (
@@ -311,13 +320,17 @@ const read = (context: Context, frame: Frame, node: Node): void => {
         name.startsWith('node:process:') ||
         name.startsWith('process:')
       )
-        effect(context, frame, `read ${name}`, node);
+        effect(context, frame, { message: `read ${name}`, node });
     }
     if (value.kind === 'reference') {
       const binding = context.project.bindings.get(value.id);
       context.evaluation.reads.add(value.id);
       if (binding && !binding.parameter && (binding.mutable || context.changed.has(binding.id)))
-        effect(context, frame, `read changing ${binding.name}`, node, binding.id);
+        effect(context, frame, {
+          message: `read changing ${binding.name}`,
+          node,
+          ...(binding.id ? { binding: binding.id } : {}),
+        });
     }
   }
 };
@@ -326,40 +339,52 @@ const read = (context: Context, frame: Frame, node: Node): void => {
 const invoke = (
   context: Context,
   frame: Frame,
-  values: readonly Value[],
-  args: readonly (readonly Value[])[],
-  node: Node,
+  {
+    values,
+    args,
+    node,
+  }: Readonly<{ values: readonly Value[]; args: readonly (readonly Value[])[]; node: Node }>,
 ): readonly Value[] =>
   unique(
-    values.flatMap((value) => {
-      if (value.kind === 'function') return evaluateFunction(context, value.id, args, frame);
-      if (value.kind === 'external') {
-        const name = value.name.replace(/^globalThis\./, '');
-        const known = effectName(name, context.project.custom);
-        if (known) effect(context, frame, known, node);
-        if (name === 'Date' && (node['type'] === 'CallExpression' || args.length === 0))
-          effect(context, frame, 'current time', node);
-        const match = /^@ts-calm\/fp(?:\/boundary)?:([^.]+)$/.exec(name);
-        if (match)
-          for (const index of fpCallbacks[match[1] ?? ''] ?? [])
-            invoke(context, frame, args[index] ?? [], [[unknown]], node);
-        return [{ kind: 'external' as const, name: `${name}()` }];
-      }
-      return [unknown];
-    }),
+    values.flatMap(
+      /** @impure Evaluate calls using the supplied mutable analysis context. */ (value) => {
+        if (value.kind === 'function')
+          return evaluateFunction(context, value.id, { args, ...(frame ? { caller: frame } : {}) });
+        if (value.kind === 'external') {
+          const name = value.name.replace(/^globalThis\./, '');
+          const known = effectName(name, context.project.custom);
+          if (known) effect(context, frame, { message: known, node });
+          if (name === 'Date' && (node['type'] === 'CallExpression' || args.length === 0))
+            effect(context, frame, { message: 'current time', node });
+          const match = /^@ts-calm\/fp(?:\/boundary)?:([^.]+)$/.exec(name);
+          if (match)
+            for (const index of fpCallbacks[match[1] ?? ''] ?? [])
+              invoke(context, frame, { values: args[index] ?? [], args: [[unknown]], node });
+          return [{ kind: 'external' as const, name: `${name}()` }];
+        }
+        return [unknown];
+      },
+    ),
   );
 
 /** @impure Update private collection provenance after a modeled mutating operation. */
 const mutateCollection = (
   context: Context,
   frame: Frame,
-  receiver: readonly Value[],
-  method: string,
-  args: readonly (readonly Value[])[],
-  node: Node,
+  {
+    receiver,
+    method,
+    args,
+    node,
+  }: Readonly<{
+    receiver: readonly Value[];
+    method: string;
+    args: readonly (readonly Value[])[];
+    node: Node;
+  }>,
 ): void => {
   context.evaluation.revision += 1;
-  write(context, frame, receiver, node);
+  write(context, frame, { values: receiver, node });
   for (const value of receiver)
     if (value.kind === 'fresh' && ['push', 'unshift', 'splice', 'set', 'add'].includes(method)) {
       const inserted = method === 'set' ? (args[1] ?? []) : args.flat();
@@ -371,21 +396,21 @@ const mutateCollection = (
 const collectionResult = (
   context: Context,
   frame: Frame,
-  node: Node,
-  elements: readonly Value[],
-  seen: ReadonlySet<string>,
+  {
+    node,
+    elements,
+    seen,
+  }: Readonly<{ node: Node; elements: readonly Value[]; seen: ReadonlySet<string> }>,
 ): readonly Value[] => {
-  const allocated = fresh(
-    context,
-    frame,
-    {
+  const allocated = fresh(context, frame, {
+    node: {
       type: 'ArrayExpression',
       start: offset(node),
       end: offset(node, 'end'),
       elements: [],
     },
     seen,
-  );
+  });
   for (const value of allocated) if (value.kind === 'fresh') value.slots.set('*', elements);
   return allocated;
 };
@@ -393,8 +418,10 @@ const collectionResult = (
 const collectionArguments = (
   context: Context,
   method: string,
-  collections: readonly Value[],
-  args: readonly (readonly Value[])[],
+  {
+    collections,
+    args,
+  }: Readonly<{ collections: readonly Value[]; args: readonly (readonly Value[])[] }>,
 ): readonly (readonly Value[])[] => {
   const elements = access(context, collections, '*');
   if (method === 'sort' || method === 'toSorted') return [elements, elements];
@@ -407,8 +434,7 @@ const collectionArguments = (
 const call = (
   context: Context,
   frame: Frame,
-  node: Node,
-  seen: ReadonlySet<string>,
+  { node, seen }: Readonly<{ node: Node; seen: ReadonlySet<string> }>,
 ): readonly Value[] => {
   const cache = `${offset(node)}:${offset(node, 'end')}`;
   const perFrame = cachedCalls(context, frame);
@@ -417,25 +443,26 @@ const call = (
   if (perFrame.active.has(cache)) return [unknown];
   perFrame.active.add(cache);
   const callee = record(node['callee']),
-    args = nodes(node['arguments']).map((arg) => resolveValue(context, frame, arg, seen));
-  const targets = resolveValue(context, frame, callee, seen);
+    args = nodes(node['arguments']).map((arg) => resolveValue(context, frame, { node: arg, seen }));
+  const targets = resolveValue(context, frame, { node: callee, seen });
   let result: readonly Value[] = [unknown];
   const globalName = targets.find((value) => value.kind === 'external');
   const name = globalName?.kind === 'external' ? globalName.name : '';
   if (node['type'] === 'NewExpression' && ['Map', 'Set', 'Array', 'Date'].includes(name)) {
-    result = fresh(context, frame, node, seen);
-    if (name === 'Date' && args.length === 0) effect(context, frame, 'current time', node);
+    result = fresh(context, frame, { node, seen });
+    if (name === 'Date' && args.length === 0)
+      effect(context, frame, { message: 'current time', node });
   } else if (objectMutators.includes(name)) {
     context.evaluation.revision += 1;
-    write(context, frame, args[0] ?? [], node);
+    write(context, frame, { values: args[0] ?? [], node });
     result = args[0] ?? [unknown];
     if (name === 'Object.assign')
       for (const value of result)
         if (value.kind === 'fresh') value.spread.push(...args.slice(1).flat());
   } else {
-    result = invoke(context, frame, targets, args, node);
+    result = invoke(context, frame, { values: targets, args, node });
     if (callee['type'] === 'MemberExpression') {
-      const receiver = resolveValue(context, frame, record(callee['object']), seen),
+      const receiver = resolveValue(context, frame, { node: record(callee['object']), seen }),
         method = keyOf(record(callee['property']));
       const collections = receiver.filter(
         (value) =>
@@ -444,15 +471,13 @@ const call = (
       );
       if (collections.length) {
         if (arrayMethods.includes(method) || collectionMethods.includes(method))
-          mutateCollection(context, frame, collections, method, args, node);
+          mutateCollection(context, frame, { receiver: collections, method, args, node });
         const transformed = callbackMethods.includes(method)
-          ? invoke(
-              context,
-              frame,
-              args[0] ?? [],
-              collectionArguments(context, method, collections, args),
+          ? invoke(context, frame, {
+              values: args[0] ?? [],
+              args: collectionArguments(context, method, { collections, args }),
               node,
-            )
+            })
           : [unknown];
         if (['get', 'at', 'pop', 'shift', 'find'].includes(method))
           result = access(context, collections, '*');
@@ -469,7 +494,7 @@ const call = (
                     ),
                   )
                 : access(context, collections, '*');
-          result = collectionResult(context, frame, node, elements, seen);
+          result = collectionResult(context, frame, { node, elements, seen });
         }
       }
       if (
@@ -479,7 +504,7 @@ const call = (
             (value.kind === 'reference' || value.kind === 'fresh') && value.shape === 'promise',
         )
       )
-        for (const arg of args) invoke(context, frame, arg, [[unknown]], node);
+        for (const arg of args) invoke(context, frame, { values: arg, args: [[unknown]], node });
     }
   }
   perFrame.active.delete(cache);
@@ -508,14 +533,17 @@ const cachedCalls = (
 const visit = (
   context: Context,
   frame: Frame,
-  node: Node,
-  parent: Node,
-  key: string,
-  conditional = false,
+  {
+    node,
+    parent,
+    key,
+    conditional = false,
+  }: Readonly<{ node: Node; parent: Node; key: string; conditional?: boolean }>,
 ): void => {
   const kind = text(node, 'type');
   if (functionNode(node)) return;
-  if (kind === 'CallExpression' || kind === 'NewExpression') call(context, frame, node, new Set());
+  if (kind === 'CallExpression' || kind === 'NewExpression')
+    call(context, frame, { node, seen: new Set() });
   if (
     kind === 'AssignmentExpression' ||
     kind === 'UpdateExpression' ||
@@ -526,32 +554,28 @@ const visit = (
       const model = modelFor(context, frame),
         binding = model ? model.bindings.get(model.refs.get(offset(target)) ?? '') : false;
       if (binding && !frame.active.has(binding.owner))
-        write(
-          context,
-          frame,
-          [{ kind: 'reference', id: binding.id, path: [], shape: binding.type }],
+        write(context, frame, {
+          values: [{ kind: 'reference', id: binding.id, path: [], shape: binding.type }],
           node,
-          true,
-        );
+          bindingAssignment: true,
+        });
     } else {
       const key = target['computed']
         ? literalKey(record(target['property']))
         : keyOf(record(target['property']));
       const receivers =
         target['type'] === 'MemberExpression'
-          ? resolveValue(context, frame, record(target['object']))
-          : resolveValue(context, frame, target);
-      write(
-        context,
-        frame,
-        receivers.map((value) =>
+          ? resolveValue(context, frame, { node: record(target['object']) })
+          : resolveValue(context, frame, { node: target });
+      write(context, frame, {
+        values: receivers.map((value) =>
           value.kind === 'reference' ? { ...value, path: [...value.path, key] } : value,
         ),
         node,
-      );
+      });
       if (kind === 'AssignmentExpression' && target['type'] === 'MemberExpression') {
         context.evaluation.revision += 1;
-        const values = resolveValue(context, frame, record(node['right']));
+        const values = resolveValue(context, frame, { node: record(node['right']) });
         for (const owner of receivers)
           if (owner.kind === 'fresh') {
             const local = owner.id.startsWith(
@@ -580,16 +604,23 @@ const visit = (
   const branching = conditional || branchingNodes.includes(kind);
   for (const child of children(node))
     if (child.key !== 'typeAnnotation')
-      visit(context, frame, child.node, node, child.key, branching);
+      visit(context, frame, {
+        node: child.node,
+        parent: node,
+        key: child.key,
+        conditional: branching,
+      });
 };
 
 /** @impure Track calls and their externally visible effects for a single root function. */
 const executeFunction = (
   context: Context,
   fn: FunctionModel,
-  summary: string,
-  args: readonly (readonly Value[])[] = [],
-  caller?: Frame,
+  {
+    summary,
+    args = [],
+    caller,
+  }: Readonly<{ summary: string; args?: readonly (readonly Value[])[]; caller?: Frame }>,
 ): readonly Value[] => {
   const env = new Map(caller?.env);
   for (const parameter of fn.params) {
@@ -617,9 +648,9 @@ const executeFunction = (
     )
       return;
     const initial = record(parameter['right']);
-    visit(context, frame, initial, parameter, 'right');
+    visit(context, frame, { node: initial, parent: parameter, key: 'right' });
     for (const parameterBinding of fn.params.filter((item) => item.index === index)) {
-      let values = resolveValue(context, frame, initial);
+      let values = resolveValue(context, frame, { node: initial });
       for (const key of parameterBinding.path) values = access(context, values, key);
       const binding = context.project.bindings.get(parameterBinding.binding);
       if (!caller && binding)
@@ -630,19 +661,19 @@ const executeFunction = (
       env.set(parameterBinding.binding, values);
     }
   });
-  visit(context, frame, fn.body, {}, '');
+  visit(context, frame, { node: fn.body, parent: {}, key: '' });
   const returned: Value[] = [];
   /** @impure Append return origins to the current private analysis buffer. */
   const collect = (node: Node): void => {
     if (functionNode(node)) return;
     if (node['type'] === 'ReturnStatement')
-      returned.push(...resolveValue(context, frame, record(node['argument'])));
+      returned.push(...resolveValue(context, frame, { node: record(node['argument']) }));
     for (const child of children(node)) collect(child.node);
   };
   if (fn.body['type'] === 'BlockStatement') collect(fn.body);
-  else returned.push(...resolveValue(context, frame, fn.body));
+  else returned.push(...resolveValue(context, frame, { node: fn.body }));
   if (context.project.declared.has(fn.id) && caller)
-    effect(context, frame, `declared effect: ${fn.reason}`, fn.node);
+    effect(context, frame, { message: `declared effect: ${fn.reason}`, node: fn.node });
   const shape = typeKind(record(fn.node['returnType']));
   return unique(
     (returned.length ? returned : [unknown]).map((value) =>
@@ -655,12 +686,14 @@ const executeFunction = (
 export const evaluateFunction = (
   context: Context,
   id: string,
-  args: readonly (readonly Value[])[] = [],
-  caller?: Frame,
+  { args = [], caller }: Readonly<{ args?: readonly (readonly Value[])[]; caller?: Frame }> = {},
 ): readonly Value[] => {
   const fn = context.project.functions.get(id);
   if (!fn) return [unknown];
-  const description = summaryContext(context.project, fn, args, caller);
+  const description = summaryContext(context.project, fn, {
+    args,
+    ...(caller ? { caller: caller } : {}),
+  });
   let key = description.key;
   const { borrowed, recursion } = description;
   const evaluation = context.evaluation;
@@ -716,7 +749,11 @@ export const evaluateFunction = (
   evaluation.stack.push(key);
   evaluation.expansions += 1;
   const revision = evaluation.revision;
-  const returned = executeFunction(context, fn, key, args, caller);
+  const returned = executeFunction(context, fn, {
+    summary: key,
+    args,
+    ...(caller ? { caller: caller } : {}),
+  });
   const reusable = reusableReturn(returned, context.project);
   const values = summary.recursive
     ? reusable && returned.every((value) => value.kind !== 'fresh')
@@ -743,8 +780,10 @@ export const evaluateFunction = (
 export const evaluatePurity = (
   project: Project,
   fn: FunctionModel,
-  changed: ReadonlySet<string>,
-  maximumExpansions = 512,
+  {
+    changed,
+    maximumExpansions = 512,
+  }: Readonly<{ changed: ReadonlySet<string>; maximumExpansions?: number }>,
 ): Evaluation => {
   const evaluation: Evaluation = {
     effects: new Map(),
@@ -769,7 +808,10 @@ export const evaluatePurity = (
     const summary = evaluation.summaries.get(key);
     if (!summary) continue;
     summary.ready = false;
-    evaluateFunction(context, summary.id, summary.args, summary.caller);
+    evaluateFunction(context, summary.id, {
+      args: summary.args,
+      ...(summary.caller ? { caller: summary.caller } : {}),
+    });
   }
   // Retain report facts and counters, not temporary abstract heaps and call frames.
   evaluation.fresh.clear();

@@ -14,12 +14,10 @@ const missingResolutions = (
     for (const imported of file.parsed.imports)
       if (!resolved.has(importKey(file.source.path, imported)))
         diagnostics.push(
-          diagnostic(
-            file.source,
-            'imports/resolve',
-            `Missing resolution for ${imported.specifier}; supply a complete import graph or use checkProject.`,
-            imported.offset,
-          ),
+          diagnostic(file.source, 'imports/resolve', {
+            message: `Missing resolution for ${imported.specifier}; supply a complete import graph or use checkProject.`,
+            offset: imported.offset,
+          }),
         );
   return diagnostics;
 };
@@ -35,16 +33,17 @@ const brokenResolutions = (
     if (!source) continue;
     if (entry.target.kind === 'project' && !inspected.has(entry.target.path))
       diagnostics.push(
-        diagnostic(
-          source,
-          'imports/resolve',
-          `Project target ${entry.target.path} is missing from the inspected source set.`,
-          entry.imported.offset,
-        ),
+        diagnostic(source, 'imports/resolve', {
+          message: `Project target ${entry.target.path} is missing from the inspected source set.`,
+          offset: entry.imported.offset,
+        }),
       );
     if (entry.target.kind === 'error')
       diagnostics.push(
-        diagnostic(source, 'imports/resolve', entry.target.message, entry.imported.offset),
+        diagnostic(source, 'imports/resolve', {
+          message: entry.target.message,
+          offset: entry.imported.offset,
+        }),
       );
   }
   return diagnostics;

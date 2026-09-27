@@ -22,7 +22,7 @@ it.each(['chain', 'diamond', 'fanout'] as const)(
     const root = [...project.functions.values()].find((fn) => fn.name === 'f18');
     expect(root).toBeDefined();
     if (!root) return;
-    const result = evaluatePurity(project, root, new Set());
+    const result = evaluatePurity(project, root, { changed: new Set() });
     expect(result.effects.size).toBe(0);
     expect(result.expansions).toBeLessThanOrEqual(kind === 'diamond' ? 55 : 19);
     if (kind !== 'chain') expect(result.cacheHits).toBeGreaterThan(0);
@@ -130,7 +130,7 @@ it('stops at a deterministic context budget and exposes incomplete analysis', ()
   );
   const root = [...project.functions.values()].find((fn) => fn.name === 'f11');
   if (!root) throw new Error('Missing fixture function');
-  const result = evaluatePurity(project, root, new Set(), 8);
+  const result = evaluatePurity(project, root, { changed: new Set(), maximumExpansions: 8 });
   expect(result.expansions).toBe(8);
   expect(result.incomplete).toBe(true);
 });

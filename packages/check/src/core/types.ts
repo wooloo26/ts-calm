@@ -2,6 +2,7 @@
 export type RuleName =
   | 'commit-message'
   | 'function-length'
+  | 'function-params'
   | 'boundary'
   | 'no-file-cycles'
   | 'no-module-cycles'
@@ -74,6 +75,8 @@ export type CheckConfig = Readonly<{
       | boolean
       | Readonly<{ scopes?: readonly string[]; maxLength?: number; ascii?: boolean }>;
     'function-length'?: boolean | Readonly<{ warning?: number; maximum?: number }>;
+    /** Limit every callable signature to three parameters. */
+    'function-params'?: boolean;
     boundary?: boolean;
     'no-file-cycles'?: boolean;
     'no-module-cycles'?: boolean;
@@ -101,10 +104,12 @@ export type FunctionFact = Readonly<{
 /** One import or re-export, including type-only forms. */
 export type ImportFact = Readonly<{ specifier: string; offset: number; typeOnly: boolean }>;
 export type Fact = Readonly<{ name: string; offset: number }>;
+export type SignatureFact = Readonly<{ offset: number; parameters: number }>;
 export type ParsedSource = Readonly<{
   ast?: unknown;
   comments: readonly SourceComment[];
   functions: readonly FunctionFact[];
+  signatures: readonly SignatureFact[];
   imports: readonly ImportFact[];
   strict: readonly Fact[];
   effects: readonly Fact[];

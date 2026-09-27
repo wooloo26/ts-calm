@@ -8,8 +8,7 @@ const keys = (values: readonly Value[]): string => JSON.stringify(values.map(val
 export const summaryContext = (
   project: Project,
   fn: FunctionModel,
-  args: readonly (readonly Value[])[],
-  caller?: Frame,
+  { args, caller }: Readonly<{ args: readonly (readonly Value[])[]; caller?: Frame }>,
 ): Readonly<{ key: string; borrowed: boolean; recursion: string }> => {
   const captures = new Set(fn.captures);
   const pending = args.flat();

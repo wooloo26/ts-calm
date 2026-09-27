@@ -5,8 +5,6 @@
  * @effects node:module
  * @effects node:os
  * @effects process
- * @allow strict-fp/no-throw -- A missing configuration, or a compiler that reports nothing, is an operational failure.
- * @allow strict-fp/no-try -- Remove only this invocation's compiler cache in finally.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -31,7 +29,9 @@ const execute = (root: string, executable: string, args: readonly string[]) => {
     maxBuffer: 32 * 1024 * 1024,
     env: process.env,
   });
+  // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
   if (result.error) throw new Error(`Cannot start ${executable}: ${result.error.message}`);
+  // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
   if (result.signal) throw new Error(`Compiler terminated by ${result.signal}.`);
   return { status: result.status ?? 2, stdout: result.stdout, stderr: result.stderr };
 };
@@ -75,8 +75,10 @@ const typeDiagnostics = (
 export const typecheckProject = (root: string): readonly Diagnostic[] => {
   const config = join(root, 'tsconfig.json');
   if (!existsSync(config))
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error('tsconfig.json is missing. Provide a project configuration for typecheck.');
   const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-types-'));
+  // @allow strict-fp/no-try -- Preserve unconditional cleanup and exception precedence required by this boundary API.
   try {
     const output = execute(root, binary('typescript', 'bin/tsc'), [
       '--project',
@@ -90,6 +92,7 @@ export const typecheckProject = (root: string): readonly Diagnostic[] => {
     ]);
     const diagnostics = typeDiagnostics(output.stdout, (file) => fileName(root, file));
     if (output.status !== 0 && diagnostics.length === 0)
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error(output.stderr || output.stdout || 'TypeScript failed.');
     return diagnostics;
   } finally {

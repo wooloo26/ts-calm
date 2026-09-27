@@ -3,8 +3,6 @@
  * @effects node:child_process
  * @effects node:fs
  * @effects node:os
- * @allow strict-fp/no-throw -- Git conflicts, unsafe paths and index changes are operational failures.
- * @allow strict-fp/no-try -- Always remove only the temporary directory owned by this invocation.
  */
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,6 +22,7 @@ const git = (root: string, args: readonly string[], input?: string): Buffer => {
     ...(typeof input === 'string' ? { input } : {}),
   });
   if (result.error || result.status !== 0)
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error(result.error?.message ?? result.stderr.toString('utf8'));
   return result.stdout;
 };
@@ -39,11 +38,13 @@ const indexEntries = (index: string): readonly IndexEntry[] => {
   for (const entry of index.split('\0').filter(Boolean)) {
     const match = /^(\d+) ([0-9a-f]+) (\d)\t([\s\S]+)$/.exec(entry);
     if (!match || match[3] !== '0')
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error('Resolve index conflicts before checking staged content.');
     const mode = match[1] ?? '',
       object = match[2] ?? '',
       path = match[4] ?? '';
     if (mode !== '100644' && mode !== '100755')
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error(
         `A staged ${modeKind(mode)} cannot be inspected as a source snapshot: ${path}. Unstage it, or check the working tree instead.`,
       );
@@ -60,6 +61,7 @@ const blobs = (root: string, objects: readonly string[]): ReadonlyMap<string, Bu
   let cursor = 0;
   for (const object of wanted) {
     const headerEnd = output.indexOf(newline, cursor);
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     if (headerEnd < 0) throw new Error(`git cat-file --batch ended before ${object}.`);
     const [oid = '', kind = '', size = ''] = output
       .subarray(cursor, headerEnd)
@@ -67,6 +69,7 @@ const blobs = (root: string, objects: readonly string[]): ReadonlyMap<string, Bu
       .split(' ');
     const length = Number(size);
     if (kind !== 'blob' || !Number.isSafeInteger(length) || oid !== object)
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error(`git cat-file did not return the staged blob ${object}.`);
     contents.set(object, output.subarray(headerEnd + 1, headerEnd + 1 + length));
     cursor = headerEnd + 1 + length + 1;
@@ -91,10 +94,13 @@ const materialize = (root: string, temporary: string, index: string): readonly I
       within.startsWith('../') ||
       isAbsolute(within)
     )
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error(`Staged path escapes the snapshot: ${entry.path}`);
     if (entry.path.split(/[\\/]/).some((part) => part === '.git' || part === 'node_modules'))
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error(`Do not stage repository internals or dependencies: ${entry.path}`);
     const content = contents.get(entry.object);
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     if (!content) throw new Error(`No staged content for ${entry.path}.`);
     mkdirSync(dirname(destination), { recursive: true });
     writeFileSync(destination, content);
@@ -120,6 +126,7 @@ export const withStagedProject = async <Value>(
   const repository = git(root, ['rev-parse', '--show-toplevel']).toString('utf8').trim();
   const before = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
   const temporary = mkdtempSync(join(tmpdir(), 'ts-calm-staged-'));
+  // @allow strict-fp/no-try -- Preserve unconditional cleanup and exception precedence required by this boundary API.
   try {
     const entries = materialize(repository, temporary, before);
     linkSnapshotDependencies(
@@ -129,6 +136,7 @@ export const withStagedProject = async <Value>(
     );
     const result = await inspect(temporary);
     const after = git(repository, ['ls-files', '--stage', '-z']).toString('utf8');
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     if (before !== after) throw new Error('Git index changed while checking; retry.');
     return result;
   } finally {

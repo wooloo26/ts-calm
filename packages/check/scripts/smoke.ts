@@ -63,6 +63,7 @@ await withProject(
     assert.equal(version.status, 0);
     assert.match(version.stdout, /^\d+\.\d+\.\d+/);
     assert.equal(run(root, 'explain', 'purity', '--json').status, 0);
+    assert.match(run(root, 'explain', 'function-params').stdout, /at most three/);
     assert.equal(run(root, 'check').status, 0);
     assert.equal(run(root, 'typecheck', '--json').status, 0);
     initializeGit(root);
@@ -77,6 +78,24 @@ await withProject(
     const violation = run(root, 'check', '--json');
     assert.equal(violation.status, 1);
     assert.match(violation.stdout, /strict-fp\/no-null/);
+    write(root, 'src/a.ts', 'export const f=(a:number,b:number,c:number,d:number)=>[a,b,c,d];');
+    const parameters = run(root, 'check', '--json');
+    assert.equal(parameters.status, 1);
+    assert.match(parameters.stdout, /function-params/);
+    write(root, 'src/a.ts', 'export const value=1;');
+    const adapter =
+      '/** @boundary Adapt the fixed vendor callback. */\n' +
+      '// @allow function-params -- The vendor supplies four separate arguments.\n' +
+      'export const f=(a:number,b:number,c:number,d:number)=>[a,b,c,d];';
+    write(root, 'src/adapter.b.ts', adapter);
+    assert.equal(run(root, 'check').status, 0);
+    initializeGit(root);
+    write(root, 'src/adapter.b.ts', adapter + '\nexport const unallowed=()=>null;');
+    assert.equal(run(root, 'check', '--staged').status, 0);
+    const scoped = run(root, 'check', '--json');
+    assert.equal(scoped.status, 1);
+    assert.match(scoped.stdout, /strict-fp\/no-null/);
+    assert.doesNotMatch(scoped.stdout, /function-params/);
     const invalid = run(root, 'check', '--unknown', '--json');
     assert.equal(invalid.status, 2);
     assert.deepEqual(JSON.parse(invalid.stdout).error.kind, 'operational');

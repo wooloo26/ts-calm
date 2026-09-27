@@ -14,10 +14,17 @@ const inWorkspacePackage = (resolved: string, workspacePackages: readonly string
 export const classifyTarget = (
   root: string,
   owned: ReadonlySet<string>,
-  specifier: string,
-  resolved: string,
-  packageTarget = false,
-  workspacePackages: readonly string[] = [],
+  {
+    specifier,
+    resolved,
+    packageTarget = false,
+    workspacePackages = [],
+  }: Readonly<{
+    specifier: string;
+    resolved: string;
+    packageTarget?: boolean;
+    workspacePackages?: readonly string[];
+  }>,
 ): ImportResolution => {
   const path = relative(root, resolved).replaceAll('\\', '/');
   const inside = path !== '..' && !path.startsWith('../') && !isAbsolute(path);

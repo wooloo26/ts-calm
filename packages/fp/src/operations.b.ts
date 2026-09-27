@@ -1,6 +1,5 @@
 /**
  * @boundary Bridge overload correlations that TypeScript cannot retain in the shared implementation.
- * @allow strict-fp/no-assertion -- Overloads correlate handlers and container variants without coercing payloads.
  */
 import { get, getError, isOk, isResult, isSome } from './containers.ts';
 import type { AsyncResult, Err, None, Ok, Option, Result, Some } from './containers.ts';
@@ -100,17 +99,21 @@ export function match<Value, Problem, Present, Absent>(
 ): Present | Absent | Promise<Present | Absent | Awaited<Present | Absent>> {
   if ('then' in value)
     return value.then((result) =>
+      // @allow strict-fp/no-assertion -- Overloads correlate handlers and container variants without coercing payloads.
       match(result, cases as ResultCases<Value, Problem, Present, Absent>),
     );
   if (isResult(value)) {
+    // @allow strict-fp/no-assertion -- Overloads correlate handlers and container variants without coercing payloads.
     const handlers = cases as ResultCases<Value, Problem, Present, Absent>;
     return isOk(value) ? handlers.ok(get(value)) : handlers.err(getError(value));
   }
+  // @allow strict-fp/no-assertion -- Overloads correlate handlers and container variants without coercing payloads.
   const handlers = cases as OptionCases<Value, Present, Absent>;
   return isSome(value) ? handlers.some(get(value)) : handlers.none();
 }
 
 const callWithoutInput = <Problem, Output>(callback: (problem: Problem) => Output): Output =>
+  // @allow strict-fp/no-assertion -- Overloads correlate handlers and container variants without coercing payloads.
   (callback as () => Output)();
 
 /**

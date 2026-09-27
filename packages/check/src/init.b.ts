@@ -1,7 +1,6 @@
 /**
  * @boundary Create the missing Node ESM manifest choice, preserving existing project decisions.
  * @effects node:fs
- * @allow strict-fp/no-throw -- Invalid or concurrently changed metadata must not be overwritten.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -44,11 +43,13 @@ export const initializeProject = async (root: string): Promise<InitResult> => {
   const packagePath = join(root, 'package.json');
   const previous = existsSync(packagePath) ? readFileSync(packagePath, 'utf8') : '';
   const manifest: unknown = previous ? JSON.parse(previous) : {};
+  // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
   if (!isPlainObject(manifest)) throw new Error('package.json must contain an object.');
   if (!Object.hasOwn(manifest, 'type')) {
     const content = pretty({ ...manifest, type: 'module' });
     if (previous) {
       if (readFileSync(packagePath, 'utf8') !== previous)
+        // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
         throw new Error('package.json changed during init; retry.');
       writeFileSync(packagePath, content);
       updated.push('package.json');

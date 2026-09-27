@@ -1,5 +1,5 @@
 import { diagnostic } from '#src/core/diagnostics';
-import { strictChecks } from '#src/core/types';
+import { analyzeAllowances } from '#src/rules/allow';
 import type { AnalyzedFile, Diagnostic } from '#src/core/types';
 
 type Declaration = Readonly<{ tag: string; value: string; offset: number }>;
@@ -31,12 +31,13 @@ const declarations = ({ source, parsed }: AnalyzedFile): readonly Declaration[] 
 export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
   const { source, parsed } = file;
   const tags = declarations(file);
-  const diagnostics: Diagnostic[] = [];
-  const allowances = new Set<string>();
+  const analyzed = analyzeAllowances(file);
+  const diagnostics: Diagnostic[] = [...analyzed.diagnostics];
+  const allowances = analyzed.allowances;
   const suffix = source.path.endsWith('.b.ts');
   /** @impure Append a diagnostic to the current analysis result. */
   const report = (name: string, message: string, offset = 0): void => {
-    diagnostics.push(diagnostic(source, `boundary/${name}`, message, offset));
+    diagnostics.push(diagnostic(source, `boundary/${name}`, { message, offset }));
   };
   if (!suffix) {
     for (const effect of parsed.effects)
@@ -45,7 +46,7 @@ export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
         `${effect.name} must be isolated in a documented .b.ts implementation.`,
         effect.offset,
       );
-    if (tags.some((tag) => ['boundary', 'effects', 'allow'].includes(tag.tag)))
+    if (tags.some((tag) => ['boundary', 'effects'].includes(tag.tag)))
       report('suffix', 'Boundary declarations only belong in .b.ts files.');
     return { diagnostics, allowances };
   }
@@ -58,7 +59,7 @@ export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
   const observed = new Set(parsed.effects.map((effect) => effect.name));
   const declared = new Set<string>();
   for (const tag of tags) {
-    if (tag.tag === 'boundary' || tag.tag === 'impure') continue;
+    if (['boundary', 'impure', 'allow'].includes(tag.tag)) continue;
     if (tag.tag === 'effects') {
       if (!tag.value || /\s|\*/.test(tag.value))
         report('declaration', '@effects requires one exact module or API name.', tag.offset);
@@ -69,33 +70,12 @@ export const analyzeBoundary = (file: AnalyzedFile): BoundaryAnalysis => {
         report('unused', `Effect ${tag.value} is not used; remove the declaration.`, tag.offset);
       continue;
     }
-    if (tag.tag !== 'allow') {
-      report('tag', `Unknown boundary tag @${tag.tag}.`, tag.offset);
-      continue;
-    }
-    const match = /^strict-fp\/(\S+)\s+--\s+(\S[\s\S]*)$/.exec(tag.value);
-    const check = match?.[1] ?? '';
-    if (!match || (check !== '*' && !strictChecks.some((name) => name === check))) {
-      report(
-        'allow',
-        'Use @allow strict-fp/<check> -- reason, or strict-fp/* -- reason.',
-        tag.offset,
-      );
-      continue;
-    }
-    if (allowances.has(check) || allowances.has('*') || (check === '*' && allowances.size > 0))
-      report('duplicate', `Overlapping allowance ${check}.`, tag.offset);
-    if (!parsed.strict.some((fact) => check === '*' || fact.name === check))
-      report('unused', `Allowance ${check} has no corresponding syntax; remove it.`, tag.offset);
-    allowances.add(check);
+    report('tag', `Unknown boundary tag @${tag.tag}.`, tag.offset);
   }
   for (const effect of parsed.effects)
     if (!declared.has(effect.name))
       report('undeclared', `Declare @effects ${effect.name}.`, effect.offset);
-  const actualAllowance = parsed.strict.some(
-    (fact) => allowances.has('*') || allowances.has(fact.name),
-  );
-  if (!parsed.hasImplementation || (observed.size === 0 && !actualAllowance))
+  if (!parsed.hasImplementation || (observed.size === 0 && allowances.size === 0))
     report(
       'purpose',
       'No direct effect or concrete adaptation justifies .b.ts; use an ordinary source file.',

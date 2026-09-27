@@ -37,3 +37,5 @@ plus the `CheckConfig`, `Diagnostic`, `RuleName`, `InitResult`, `CheckInput`, `S
 `StrictCheck`, `ResolvedImport`, `ImportResolution` and `ImportFact` types. `checkProject`,
 `checkSourceProject`, `checkStaged`, `checkStagedMessage`, `withStagedProject` and `initializeProject`
 are asynchronous.
+
+See [necessary line allowances](../../docs/allow.md) for boundary exceptions and fp replacements.

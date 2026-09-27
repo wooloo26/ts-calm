@@ -80,3 +80,5 @@ export const awardPoint = (text: string) => {
 
 `awardPoint('{"name":" Ada ","score":1}')` succeeds with `'{"name":"Ada","score":2}'`.
 An invalid profile returns `err('invalid-profile')`; malformed JSON returns a JSON issue.
+
+See [necessary line allowances](../../docs/allow.md) for boundary exceptions and fp replacements.

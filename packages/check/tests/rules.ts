@@ -103,26 +103,23 @@ describe('boundary declarations', () => {
   });
   it('checks direct effects and accepts a narrow actual allowance', () => {
     const body =
-      'import {readFileSync} from "node:fs"; /** @impure Read the external file. */ export function f(){try {return readFileSync("a")} catch{return ""}}';
+      'import {readFileSync} from "node:fs"; /** @impure Read the external file. */ export function f(){\n// @allow strict-fp/no-try -- Convert filesystem failures here.\ntry {return readFileSync("a")} catch{return ""}}';
     expect(rules(body)).toContain('boundary/effect');
-    const code = boundary(
-      ' * @effects node:fs\n * @allow strict-fp/no-try -- Convert filesystem failures here.',
-      body,
-    );
+    const code = boundary(' * @effects node:fs', body);
     expect(lint(code, 'src/a.b.ts')).toEqual([]);
     expect(lint(code, 'src/a.b.ts', { rules: { 'strict-fp': false } })).toEqual([]);
   });
   it('accepts all strict-fp exceptions without disabling unrelated rules', () => {
     const code = boundary(
-      ' * @allow strict-fp/* -- Adapt nullable input with an explicit fallback.',
-      'export const f=(value:any)=>value ?? null;',
+      '',
+      '// @allow strict-fp/no-any -- Adapt the external callback.\n// @allow strict-fp/no-null -- Preserve the protocol sentinel.\nexport const f=(value:any)=>value ?? null;',
     );
     expect(lint(code, 'src/a.b.ts')).toEqual([]);
     const missingEffect = code + '\nexport const now=()=>Date.now();';
     expect(rules(missingEffect, 'src/a.b.ts')).toContain('boundary/undeclared');
   });
   it('rejects unused, duplicated, malformed and unknown declarations', () => {
-    for (const tag of ['@allow strict-fp/no-try -- unused', '@effects node:fs'])
+    for (const tag of ['@effects node:fs'])
       expect(rules(boundary(` * ${tag}`, 'export const f=()=>1'), 'src/a.b.ts')).toContain(
         'boundary/unused',
       );
@@ -138,8 +135,8 @@ describe('boundary declarations', () => {
     expect(
       rules(
         boundary(
-          ' * @allow strict-fp/* -- adapt\n * @allow strict-fp/no-null -- adapt',
-          'export const f=()=>null',
+          '',
+          '// @allow strict-fp/no-null -- adapt\n// @allow strict-fp/no-null -- adapt\nexport const f=()=>null',
         ),
         'src/a.b.ts',
       ),

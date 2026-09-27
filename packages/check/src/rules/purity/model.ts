@@ -1,5 +1,5 @@
-import { record, text, offset, children, functionNode } from '#src/core/parser.b';
-import type { Node } from '#src/core/parser.b';
+import { record, text, offset, children, functionNode } from '#src/core/parser';
+import type { Node } from '#src/core/parser';
 import type { AnalyzedFile } from '#src/core/types';
 
 export type Binding = {
@@ -76,11 +76,19 @@ const members = (value: unknown): Node[] => (Array.isArray(value) ? value.map(re
 const declare = (
   model: PurityModel,
   scope: Scope,
-  pattern: Node,
-  value: Node,
-  mutable: boolean,
-  parameter = false,
-  projection: string[] = [],
+  {
+    pattern,
+    value,
+    mutable,
+    parameter = false,
+    projection = [],
+  }: Readonly<{
+    pattern: Node;
+    value: Node;
+    mutable: boolean;
+    parameter?: boolean;
+    projection?: string[];
+  }>,
 ): string[] => {
   if (pattern['type'] === 'Identifier') {
     const name = text(pattern, 'name'),
@@ -107,32 +115,45 @@ const declare = (
     return [id];
   }
   if (pattern['type'] === 'AssignmentPattern')
-    return declare(model, scope, record(pattern['left']), value, mutable, parameter, projection);
+    return declare(model, scope, {
+      pattern: record(pattern['left']),
+      value,
+      mutable,
+      parameter,
+      projection,
+    });
   if (pattern['type'] === 'RestElement')
-    return declare(model, scope, record(pattern['argument']), value, mutable, parameter, [
-      ...projection,
-      '*',
-    ]);
+    return declare(model, scope, {
+      pattern: record(pattern['argument']),
+      value,
+      mutable,
+      parameter,
+      projection: [...projection, '*'],
+    });
   const result: string[] = [];
   if (pattern['type'] === 'ObjectPattern')
     for (const property of members(pattern['properties'])) {
       const key = record(property['key']);
       result.push(
-        ...declare(
-          model,
-          scope,
-          record(property['value'] ?? property['argument']),
+        ...declare(model, scope, {
+          pattern: record(property['value'] ?? property['argument']),
           value,
           mutable,
           parameter,
-          [...projection, text(key, 'name') || text(key, 'value') || '*'],
-        ),
+          projection: [...projection, text(key, 'name') || text(key, 'value') || '*'],
+        }),
       );
     }
   if (pattern['type'] === 'ArrayPattern')
     members(pattern['elements']).forEach((item, index) =>
       result.push(
-        ...declare(model, scope, item, value, mutable, parameter, [...projection, String(index)]),
+        ...declare(model, scope, {
+          pattern: item,
+          value,
+          mutable,
+          parameter,
+          projection: [...projection, String(index)],
+        }),
       ),
     );
   return result;
@@ -144,12 +165,20 @@ const predeclare = (model: PurityModel, scope: Scope, statements: readonly Node[
     const node = record(statement['declaration'] ?? statement);
     if (node['type'] === 'VariableDeclaration')
       for (const entry of members(node['declarations']))
-        declare(model, scope, record(entry['id']), record(entry['init']), node['kind'] !== 'const');
+        declare(model, scope, {
+          pattern: record(entry['id']),
+          value: record(entry['init']),
+          mutable: node['kind'] !== 'const',
+        });
     if (node['type'] === 'FunctionDeclaration')
-      declare(model, scope, record(node['id']), node, false);
+      declare(model, scope, { pattern: record(node['id']), value: node, mutable: false });
     if (node['type'] === 'ImportDeclaration')
       for (const entry of members(node['specifiers'])) {
-        const ids = declare(model, scope, record(entry['local']), {}, false);
+        const ids = declare(model, scope, {
+          pattern: record(entry['local']),
+          value: {},
+          mutable: false,
+        });
         const binding = model.bindings.get(ids[0] ?? '');
         if (binding) {
           binding.specifier = text(record(node['source']), 'value');
@@ -190,11 +219,9 @@ const declareIteration = (model: PurityModel, node: Node, scope: Scope): void =>
   const left = record(node['left']);
   if (left['type'] !== 'VariableDeclaration') return;
   for (const entry of members(left['declarations']))
-    declare(
-      model,
-      scope,
-      record(entry['id']),
-      {
+    declare(model, scope, {
+      pattern: record(entry['id']),
+      value: {
         type: 'MemberExpression',
         object: node['right'],
         computed: true,
@@ -202,8 +229,8 @@ const declareIteration = (model: PurityModel, node: Node, scope: Scope): void =>
         start: offset(node),
         end: offset(node, 'end'),
       },
-      false,
-    );
+      mutable: false,
+    });
 };
 
 /** @impure Register type definitions for later collection and property shape resolution. */
@@ -218,9 +245,7 @@ const registerType = (model: PurityModel, node: Node): void => {
 const walkModel = (
   model: PurityModel,
   node: Node,
-  scope: Scope,
-  parent: Node,
-  anchor: number,
+  { scope, parent, anchor }: Readonly<{ scope: Scope; parent: Node; anchor: number }>,
 ): void => {
   const kind = text(node, 'type');
   model.nodeOwners.set(offset(node), scope.owner);
@@ -253,13 +278,18 @@ const walkModel = (
     model.functionNodes.set(offset(node), id);
     const child: Scope = { owner: id, parent: scope, names: new Map() };
     members(node['params']).forEach((param, index) => {
-      const ids = declare(model, child, param, {}, false, true);
+      const ids = declare(model, child, {
+        pattern: param,
+        value: {},
+        mutable: false,
+        parameter: true,
+      });
       for (const binding of ids)
         fn.params.push({ binding, index, path: model.bindings.get(binding)?.projection ?? [] });
     });
     for (const param of members(node['params']))
-      walkModel(model, param, child, node, offset(param));
-    walkModel(model, fn.body, child, node, offset(fn.body));
+      walkModel(model, param, { scope: child, parent: node, anchor: offset(param) });
+    walkModel(model, fn.body, { scope: child, parent: node, anchor: offset(fn.body) });
     return;
   }
   let current = scope;
@@ -272,17 +302,20 @@ const walkModel = (
   if (kind === 'VariableDeclaration')
     for (const entry of members(node['declarations']))
       if (!model.refs.has(offset(record(entry['id']))))
-        declare(
-          model,
-          current,
-          record(entry['id']),
-          record(entry['init']),
-          node['kind'] !== 'const',
-        );
+        declare(model, current, {
+          pattern: record(entry['id']),
+          value: record(entry['init']),
+          mutable: node['kind'] !== 'const',
+        });
   if (kind === 'ForOfStatement') declareIteration(model, node, current);
   if (kind === 'CatchClause') {
     current = { owner: scope.owner, parent: scope, names: new Map() };
-    declare(model, current, record(node['param']), {}, false, true);
+    declare(model, current, {
+      pattern: record(node['param']),
+      value: {},
+      mutable: false,
+      parameter: true,
+    });
   }
   if (kind === 'Identifier') {
     const id = find(current, text(node, 'name'));
@@ -302,7 +335,7 @@ const walkModel = (
     ].includes(kind)
       ? anchor
       : offset(child.node);
-    walkModel(model, child.node, current, node, next);
+    walkModel(model, child.node, { scope: current, parent: node, anchor: next });
   }
 };
 
@@ -322,7 +355,7 @@ export const buildPurityModel = (file: AnalyzedFile): PurityModel => {
   };
   const scope: Scope = { owner: model.module, names: new Map() };
   const program = record(file.parsed.ast);
-  walkModel(model, program, scope, {}, 0);
+  walkModel(model, program, { scope, parent: {}, anchor: 0 });
   for (const fn of model.functions.values())
     fn.captures = [
       ...new Set(

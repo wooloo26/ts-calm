@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkSourceProject, loadConfiguration } from '@ts-calm/check';
+import { spawnSync } from 'node:child_process';
+import { checkSourceProject } from '@ts-calm/check';
 import { withProject } from '#tests/fixtures/project';
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url));
@@ -48,7 +49,20 @@ describe('configuration discovery', () => {
     );
   });
   it('exposes this repository configuration to the commit policy', () => {
-    const configuration = loadConfiguration(repository);
+    // Exercise native synchronous ESM loading outside Vitest's transformed module graph.
+    // Loading both forms of the same source URL in one isolate corrupts V8 range merging.
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--conditions=source',
+        '--input-type=module',
+        '-e',
+        'import { loadConfiguration } from "./packages/check/src/config-reader.b.ts"; console.log(JSON.stringify(loadConfiguration(process.cwd())));',
+      ],
+      { cwd: repository, encoding: 'utf8', windowsHide: true, timeout: 30000 },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const configuration = JSON.parse(result.stdout);
     expect(configuration.rules?.['commit-message']).toMatchObject({
       scopes: expect.arrayContaining(['root', 'fp', 'check', 'docs', 'build']),
     });

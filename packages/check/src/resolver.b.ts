@@ -2,10 +2,11 @@
  * @boundary Resolve imports against the inspected filesystem and report unresolved dependencies explicitly.
  * @effects node:fs
  * @effects oxc-resolver
- * @allow strict-fp/no-try -- Malformed package metadata or resolver failures become resolution diagnostics.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { capture } from '@ts-calm/fp/boundary';
+import { getError, isErr } from '@ts-calm/fp';
 import { ResolverFactory } from 'oxc-resolver';
 import { classifyTarget } from '#src/resolution';
 import { compilerConditions } from '#src/compiler-options.b';
@@ -73,60 +74,63 @@ export const resolveImports = (
   const resolverCache = new Map<string, ResolverFactory>();
   for (const { source, parsed } of analyzed)
     for (const imported of parsed.imports) {
-      try {
-        const owner = Object.keys(aliases).find(
-          (name) => imported.specifier === name || imported.specifier.startsWith(`${name}/`),
-        );
-        const origin = owner
-          ? join(aliases[owner]?.[0] ?? root, 'package.json')
-          : resolve(root, source.path);
-        const conditions = compilerConditions(root, source.path, conditionCache);
-        const key = `${imported.typeOnly}:${conditions.join(',')}`;
-        let selectedResolver = resolverCache.get(key);
-        if (!selectedResolver) {
-          selectedResolver = createResolver(imported.typeOnly, conditions);
-          resolverCache.set(key, selectedResolver);
-        }
-        let resolved = selectedResolver.resolveFileSync(origin, imported.specifier);
-        const packageSpecifier = !/^[.#]/.test(imported.specifier);
-        if (packageSpecifier && (!resolved.path || resolved.builtin)) {
-          const plainKey = `${imported.typeOnly}:plain`;
-          let plainResolver = resolverCache.get(plainKey);
-          if (!plainResolver) {
-            plainResolver = createResolver(imported.typeOnly, []);
-            resolverCache.set(plainKey, plainResolver);
+      const captured = capture(
+        () => {
+          const owner = Object.keys(aliases).find(
+            (name) => imported.specifier === name || imported.specifier.startsWith(`${name}/`),
+          );
+          const origin = owner
+            ? join(aliases[owner]?.[0] ?? root, 'package.json')
+            : resolve(root, source.path);
+          const conditions = compilerConditions(root, source.path, conditionCache);
+          const key = `${imported.typeOnly}:${conditions.join(',')}`;
+          let selectedResolver = resolverCache.get(key);
+          if (!selectedResolver) {
+            selectedResolver = createResolver(imported.typeOnly, conditions);
+            resolverCache.set(key, selectedResolver);
           }
-          const plain = plainResolver.resolveFileSync(origin, imported.specifier);
-          if (plain.path && !plain.builtin) resolved = plain;
-        }
-        if (resolved.builtin) {
-          result.push({ file: source.path, imported, target: { kind: 'external' } });
-          continue;
-        }
-        if (!resolved.path) {
+          let resolved = selectedResolver.resolveFileSync(origin, imported.specifier);
+          const packageSpecifier = !/^[.#]/.test(imported.specifier);
+          if (packageSpecifier && (!resolved.path || resolved.builtin)) {
+            const plainKey = `${imported.typeOnly}:plain`;
+            let plainResolver = resolverCache.get(plainKey);
+            if (!plainResolver) {
+              plainResolver = createResolver(imported.typeOnly, []);
+              resolverCache.set(plainKey, plainResolver);
+            }
+            const plain = plainResolver.resolveFileSync(origin, imported.specifier);
+            if (plain.path && !plain.builtin) resolved = plain;
+          }
+          if (resolved.builtin) {
+            result.push({ file: source.path, imported, target: { kind: 'external' } });
+            return;
+          }
+          if (!resolved.path) {
+            result.push({
+              file: source.path,
+              imported,
+              target: {
+                kind: 'error',
+                message: `Cannot resolve ${imported.specifier}: ${resolved.error ?? 'no target'}`,
+              },
+            });
+            return;
+          }
           result.push({
             file: source.path,
             imported,
-            target: {
-              kind: 'error',
-              message: `Cannot resolve ${imported.specifier}: ${resolved.error ?? 'no target'}`,
-            },
+            target: classifyTarget(root, owned, {
+              specifier: imported.specifier,
+              resolved: resolved.path,
+              packageTarget: Boolean(resolved.packageJsonPath),
+              workspacePackages: directories,
+            }),
           });
-          continue;
-        }
-        result.push({
-          file: source.path,
-          imported,
-          target: classifyTarget(
-            root,
-            owned,
-            imported.specifier,
-            resolved.path,
-            Boolean(resolved.packageJsonPath),
-            directories,
-          ),
-        });
-      } catch (cause) {
+        },
+        { name: 'resolve-import' },
+      );
+      if (isErr(captured)) {
+        const cause = getError(captured).cause;
         result.push({
           file: source.path,
           imported,

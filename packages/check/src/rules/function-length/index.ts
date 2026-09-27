@@ -22,7 +22,7 @@ export const checkFunctionLength = (
   const allowances = new Map<number, number>();
   /** @impure Append a diagnostic to the current function analysis. */
   const report = (name: string, message: string, offset: number): void => {
-    diagnostics.push(diagnostic(source, `function-length/${name}`, message, offset));
+    diagnostics.push(diagnostic(source, `function-length/${name}`, { message, offset }));
   };
   for (const comment of parsed.comments.filter(mentionsAllowance)) {
     const allowance = parseAllowance(comment);
@@ -60,13 +60,11 @@ export const checkFunctionLength = (
     const lines = effectiveLineCount(masked, fact, parsed.functions);
     if (lines <= warning || allowances.has(fact.start)) continue;
     diagnostics.push(
-      diagnostic(
-        source,
-        'function-length',
-        `Function ${fact.name} has ${lines} effective lines (warning above ${warning}, maximum ${maximum}).`,
-        fact.start,
-        lines > maximum ? 'error' : 'warning',
-      ),
+      diagnostic(source, 'function-length', {
+        message: `Function ${fact.name} has ${lines} effective lines (warning above ${warning}, maximum ${maximum}).`,
+        offset: fact.start,
+        severity: lines > maximum ? 'error' : 'warning',
+      }),
     );
   }
   return diagnostics;

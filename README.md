@@ -10,7 +10,7 @@ toolchain. Node 24+, ESM, MIT. Nothing is published — copy the repository and 
 | [`@ts-calm/fp`](packages/fp/README.md)       | Option, Result, combinators, guards, codecs    |
 | [`@ts-calm/check`](packages/check/README.md) | Source rules, pinned `typecheck`, reusable API |
 
-- Source rules: commit message, function length, boundary, file cycles, directory cycles, strict-fp
+- Source rules: commit message, function length, parameter count, boundary, file cycles, directory cycles, strict-fp
   and purity — see [docs/rules.md](docs/rules.md).
 - Pure by default: mark known effects `/** @impure reason */`; real host effects live in documented
   `.b.ts` files.
@@ -65,3 +65,5 @@ Purity checking reports known effects, not a proof that all other code is pure. 
 analysis has a fixed per-function expansion budget; `purity/incomplete` is a warning that some
 calls remain unproven. Existing error diagnostics still fail the command. Performance reports from
 `pnpm bench` cover independent modules, call graphs, and a cold check of this repository.
+
+See [necessary line allowances](docs/allow.md) for boundary exceptions and fp replacements.

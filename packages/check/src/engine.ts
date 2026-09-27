@@ -1,6 +1,7 @@
-import { parseSource } from '#src/core/parser.b';
+import { parseSource } from '#src/core/parser';
 import { analyzeBoundary } from '#src/rules/boundary';
 import { checkFunctionLength } from '#src/rules/function-length/index';
+import { checkFunctionParams } from '#src/rules/function-params';
 import { checkImportResolutions } from '#src/rules/imports';
 import { checkNoFileCycles } from '#src/rules/no-file-cycles';
 import { checkNoModuleCycles } from '#src/rules/no-module-cycles';
@@ -30,11 +31,18 @@ export const analyzeSources = (
 const checkFile = (file: AnalyzedFile, config: CheckConfig): readonly Diagnostic[] => {
   const diagnostics: Diagnostic[] = [];
   for (const issue of file.parsed.issues)
-    diagnostics.push(diagnostic(file.source, 'source/parse', issue.name, issue.offset));
+    diagnostics.push(
+      diagnostic(file.source, 'source/parse', {
+        message: issue.name,
+        offset: issue.offset,
+      }),
+    );
   if (enabled('function-length', file.source.path, config))
     diagnostics.push(...checkFunctionLength(file, config));
   const boundary = analyzeBoundary(file);
   if (enabled('boundary', file.source.path, config)) diagnostics.push(...boundary.diagnostics);
+  if (enabled('function-params', file.source.path, config))
+    diagnostics.push(...checkFunctionParams(file, boundary.allowances));
   diagnostics.push(...checkStrictFp(file, config, boundary.allowances));
   return diagnostics;
 };

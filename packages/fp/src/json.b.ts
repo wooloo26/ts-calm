@@ -1,10 +1,9 @@
 /**
  * @boundary Validate external JSON data and turn native serialization failures into explicit results.
- * @allow strict-fp/no-null -- Null is a real JSON scalar and a valid dictionary prototype.
- * @allow strict-fp/no-try -- Normalize native serialization and reflection failures.
- * @allow strict-fp/no-undefined -- Detect missing native diagnostic output explicitly.
  */
-import { err, get, isErr, isOption, isResult, ok, unit } from './containers.ts';
+import { capture } from './capture.b.ts';
+import { isNull } from './guards.b.ts';
+import { err, get, getError, isErr, isOption, isResult, ok, unit } from './containers.ts';
 import type { Result, Unit } from './containers.ts';
 import { toOptionData, toResultData } from './data.ts';
 import type { Codec } from './contracts.ts';
@@ -14,6 +13,7 @@ export type JsonValue =
   | string
   | number
   | boolean
+  // @allow strict-fp/no-null -- Null is a real JSON scalar and a valid dictionary prototype.
   | null
   | readonly JsonValue[]
   | Readonly<{ [key: string]: JsonValue }>;
@@ -35,7 +35,7 @@ const checkJsonValue = (input: unknown): Result<Unit, JsonIssue> => {
   const ancestors = new Set<object>();
   for (let next = pending.pop(); next; next = pending.pop()) {
     const value = next.value;
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') continue;
+    if (isNull(value) || typeof value === 'string' || typeof value === 'boolean') continue;
     if (typeof value === 'number' && Number.isFinite(value)) continue;
     if (typeof value !== 'object')
       return err({ code: 'invalid-json-value', message: 'DTO contains a non-JSON scalar' });
@@ -54,7 +54,7 @@ const checkJsonValue = (input: unknown): Result<Unit, JsonIssue> => {
     if (
       Array.isArray(value)
         ? prototype !== Array.prototype
-        : prototype !== Object.prototype && prototype !== null
+        : prototype !== Object.prototype && !isNull(prototype)
     )
       return err({
         code: 'invalid-json-value',
@@ -86,16 +86,22 @@ const checkJsonValue = (input: unknown): Result<Unit, JsonIssue> => {
 };
 
 const serializeDto = (value: JsonValue): Result<string, JsonIssue> => {
-  try {
-    const checked = checkJsonValue(value);
-    if (isErr(checked)) return checked;
-    const encoded = JSON.stringify(value);
-    return typeof encoded === 'string'
-      ? ok(encoded)
-      : err({ code: 'serialization-failed', message: 'DTO has no JSON representation' });
-  } catch (cause) {
+  const captured = capture(
+    (): Result<string, JsonIssue> => {
+      const checked = checkJsonValue(value);
+      if (isErr(checked)) return checked;
+      const encoded = JSON.stringify(value);
+      return typeof encoded === 'string'
+        ? ok(encoded)
+        : err({ code: 'serialization-failed', message: 'DTO has no JSON representation' });
+    },
+    { name: 'serializeDto' },
+  );
+  if (isErr(captured)) {
+    const cause = getError(captured).cause;
     return err(fault('serialization-failed', 'JSON serialization failed', cause));
   }
+  return get(captured);
 };
 
 /**
@@ -115,16 +121,22 @@ export const encodeJson = <Value, Problem>(
 ): Result<string, JsonIssue> => serializeDto(codec.encode(value));
 
 const parseJson = (text: string): Result<unknown, JsonIssue> => {
-  try {
-    const value: unknown = JSON.parse(text);
-    const checked = checkJsonValue(value);
-    return isErr(checked) ? checked : ok(value);
-  } catch (cause) {
+  const captured = capture(
+    (): Result<unknown, JsonIssue> => {
+      const value: unknown = JSON.parse(text);
+      const checked = checkJsonValue(value);
+      return isErr(checked) ? checked : ok(value);
+    },
+    { name: 'parseJson' },
+  );
+  if (isErr(captured)) {
+    const cause = getError(captured).cause;
     return err({
       code: 'invalid-json',
       message: cause instanceof Error ? cause.message : 'JSON parsing failed',
     });
   }
+  return get(captured);
 };
 
 /**
@@ -154,33 +166,39 @@ export const decodeJson = <Value, Problem>(
  * @returns `Ok` with the text, or `Err` for a cycle or an unrepresentable value.
  */
 export const formatDiagnostic = (value: unknown, space?: number): Result<string, JsonIssue> => {
-  try {
-    const encoded = JSON.stringify(
-      value,
-      (_key: string, item: unknown) => {
-        if (isResult(item)) return toResultData(item);
-        if (isOption(item)) return toOptionData(item);
-        if (item === unit()) return 'Unit';
-        if (item instanceof Error) {
-          const properties: Readonly<Record<string, unknown>> = Object.fromEntries(
-            Object.entries(item),
-          );
-          return {
-            ...properties,
-            name: item.name,
-            message: item.message,
-            ...(typeof item.stack === 'string' ? { stack: item.stack } : {}),
-            ...(Object.hasOwn(item, 'cause') ? { cause: item.cause } : {}),
-          };
-        }
-        return item;
-      },
-      space,
-    );
-    return encoded === undefined
-      ? err({ code: 'serialization-failed', message: 'The value has no JSON representation' })
-      : ok(encoded);
-  } catch (cause) {
+  const captured = capture(
+    (): Result<string, JsonIssue> => {
+      const encoded = JSON.stringify(
+        value,
+        (_key: string, item: unknown) => {
+          if (isResult(item)) return toResultData(item);
+          if (isOption(item)) return toOptionData(item);
+          if (item === unit()) return 'Unit';
+          if (item instanceof Error) {
+            const properties: Readonly<Record<string, unknown>> = Object.fromEntries(
+              Object.entries(item),
+            );
+            return {
+              ...properties,
+              name: item.name,
+              message: item.message,
+              ...(typeof item.stack === 'string' ? { stack: item.stack } : {}),
+              ...(Object.hasOwn(item, 'cause') ? { cause: item.cause } : {}),
+            };
+          }
+          return item;
+        },
+        space,
+      );
+      return typeof encoded !== 'string'
+        ? err({ code: 'serialization-failed', message: 'The value has no JSON representation' })
+        : ok(encoded);
+    },
+    { name: 'formatDiagnostic' },
+  );
+  if (isErr(captured)) {
+    const cause = getError(captured).cause;
     return err(fault('serialization-failed', 'JSON serialization failed', cause));
   }
+  return get(captured);
 };

@@ -3,9 +3,11 @@ import type { Diagnostic, SourceFile } from '#src/core/types';
 export const diagnostic = (
   source: SourceFile,
   rule: string,
-  message: string,
-  offset = 0,
-  severity: Diagnostic['severity'] = 'error',
+  {
+    message,
+    offset = 0,
+    severity = 'error',
+  }: Readonly<{ message: string; offset?: number; severity?: Diagnostic['severity'] }>,
 ): Diagnostic => {
   const before = source.content.slice(0, offset);
   return {

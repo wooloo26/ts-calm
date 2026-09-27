@@ -13,7 +13,24 @@ export default defineConfig({
       include: ['packages/*/src/**/*.ts'],
       reportsDirectory: '.local/reports/coverage',
       reporter: ['text-summary', 'json-summary', 'html'],
-      thresholds: { statements: 75, branches: 75, functions: 87, lines: 77 },
+      thresholds: {
+        statements: 85,
+        branches: 85,
+        functions: 90,
+        lines: 85,
+        'packages/check/src/rules/allow.ts': {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
+        'packages/check/src/rules/function-params.ts': {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
+      },
     },
   },
 });

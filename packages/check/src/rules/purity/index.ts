@@ -13,12 +13,10 @@ const misplaced = (models: readonly PurityModel[], config: CheckConfig): readonl
     return model.file.parsed.comments
       .filter((comment) => /@impure\b/.test(comment.text) && !attached.has(comment.start))
       .map((comment) =>
-        diagnostic(
-          model.file.source,
-          'purity/placement',
-          'Place @impure in the JSDoc immediately before its function declaration.',
-          comment.start,
-        ),
+        diagnostic(model.file.source, 'purity/placement', {
+          message: 'Place @impure in the JSDoc immediately before its function declaration.',
+          offset: comment.start,
+        }),
       );
   });
 
@@ -57,7 +55,7 @@ const settle = (
   const pending = new Set(candidates);
   for (const fn of pending) {
     pending.delete(fn);
-    const evaluation = evaluatePurity(project, fn, changed);
+    const evaluation = evaluatePurity(project, fn, { changed });
     results.set(fn.id, evaluation);
     for (const binding of evaluation.writes) {
       if (changed.has(binding)) continue;
@@ -79,7 +77,7 @@ const settle = (
   );
   if (declared.size === 0) return results;
   const scope = { ...project, declared };
-  return new Map(candidates.map((fn) => [fn.id, evaluatePurity(scope, fn, changed)]));
+  return new Map(candidates.map((fn) => [fn.id, evaluatePurity(scope, fn, { changed })]));
 };
 
 export const checkPurity = (
@@ -106,33 +104,27 @@ export const checkPurity = (
     }
     if (fn.annotated && !fn.reason)
       diagnostics.push(
-        diagnostic(
-          model.file.source,
-          'purity/reason',
-          '@impure requires a concrete reason.',
-          fn.anchor,
-        ),
+        diagnostic(model.file.source, 'purity/reason', {
+          message: '@impure requires a concrete reason.',
+          offset: fn.anchor,
+        }),
       );
     if (fn.annotationOffsets.length > 1)
       diagnostics.push(
-        diagnostic(
-          model.file.source,
-          'purity/duplicate',
-          'Use one @impure declaration per function.',
-          fn.anchor,
-        ),
+        diagnostic(model.file.source, 'purity/duplicate', {
+          message: 'Use one @impure declaration per function.',
+          offset: fn.anchor,
+        }),
       );
     const owner = project.functions.get(fn.parent);
     const covered = !fn.name && fn.inline && owner && results.get(owner.id)?.executed.has(fn.id);
     if (result.effects.size === 0 || fn.annotated || covered) continue;
     const evidence = [...result.effects.values()];
     diagnostics.push({
-      ...diagnostic(
-        model.file.source,
-        'purity/impure',
-        `Function ${fn.name || '<callback>'} has known effects; add @impure with a reason.`,
-        fn.start,
-      ),
+      ...diagnostic(model.file.source, 'purity/impure', {
+        message: `Function ${fn.name || '<callback>'} has known effects; add @impure with a reason.`,
+        offset: fn.start,
+      }),
       help: evidence
         .slice(0, 4)
         .map((item) => `${item.message}: ${item.chain.join(' -> ')}`)
@@ -144,13 +136,11 @@ export const checkPurity = (
     const file = project.models.get(path)?.file;
     if (file)
       diagnostics.push(
-        diagnostic(
-          file.source,
-          'purity/incomplete',
-          `Purity analysis reached its context budget in ${names.slice(0, 4).join(', ')}${names.length > 4 ? ' and other functions' : ''}; unvisited calls remain unproven.`,
-          0,
-          'warning',
-        ),
+        diagnostic(file.source, 'purity/incomplete', {
+          message: `Purity analysis reached its context budget in ${names.slice(0, 4).join(', ')}${names.length > 4 ? ' and other functions' : ''}; unvisited calls remain unproven.`,
+          offset: 0,
+          severity: 'warning',
+        }),
       );
   }
   return [...diagnostics, ...misplaced([...project.models.values()], config)];

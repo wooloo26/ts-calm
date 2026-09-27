@@ -2,8 +2,6 @@
  * @boundary Inspect untrusted values, including hostile proxies, and report only a safe boolean.
  * Every sentinel comparison, prototype lookup and property probe runs under one `capture`, so an
  * uninspectable value fails closed as `false` instead of escaping as an exception.
- * @allow strict-fp/no-null -- The `null` return-type predicate is the whole purpose of isNull.
- * @allow strict-fp/no-undefined -- The `undefined` return-type predicate is the whole purpose of isUndefined.
  */
 import { capture } from './capture.b.ts';
 import { get, isOk } from './containers.ts';
@@ -32,8 +30,10 @@ export const isNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 /** The `null` absence sentinel only. Prefer `fromNullable` when handling external absence. */
+// @allow strict-fp/no-null -- The `null` return-type predicate is the whole purpose of isNull.
 export const isNull = (value: unknown): value is null => safely('isNull', () => value === null);
 /** The `undefined` absence sentinel only. An absent property and a stored `undefined` both match. */
+// @allow strict-fp/no-undefined -- The `undefined` return-type predicate is the whole purpose of isUndefined.
 export const isUndefined = (value: unknown): value is undefined =>
   safely('isUndefined', () => typeof value === 'undefined');
 

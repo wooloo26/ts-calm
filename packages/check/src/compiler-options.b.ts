@@ -4,7 +4,6 @@
  * @effects node:fs
  * @effects node:module
  * @effects process
- * @allow strict-fp/no-throw -- Invalid compiler configuration cannot silently change import resolution.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -48,6 +47,7 @@ export const compilerConditions = (
     maxBuffer: 16 * 1024 * 1024,
   });
   if (result.error || result.status !== 0)
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error(
       result.error?.message ||
         result.stderr ||

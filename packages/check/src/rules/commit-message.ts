@@ -14,26 +14,24 @@ export const validateCommitMessage = (
   const offset = message.split('').findIndex((character) => character.charCodeAt(0) > 127);
   if (options.ascii !== false && offset >= 0)
     diagnostics.push(
-      diagnostic(
-        source,
-        'commit-message/ascii',
-        'Use ASCII in the subject, body and trailers.',
-        offset,
-      ),
+      diagnostic(source, 'commit-message/ascii', {
+        message: 'Use ASCII in the subject, body and trailers.',
+        offset: offset,
+      }),
     );
   const first = message.split(/\r?\n/)[0] ?? '';
   const match = /^([a-z][a-z0-9-]*) - (\S.*)$/.exec(first);
   if (!match || first.length > (options.maxLength ?? 100))
     diagnostics.push(
-      diagnostic(
-        source,
-        'commit-message/format',
-        `Expected scope - description, at most ${options.maxLength ?? 100} characters.`,
-      ),
+      diagnostic(source, 'commit-message/format', {
+        message: `Expected scope - description, at most ${options.maxLength ?? 100} characters.`,
+      }),
     );
   else if (options.scopes && !options.scopes.includes(match[1] ?? ''))
     diagnostics.push(
-      diagnostic(source, 'commit-message/scope', `Allowed scopes: ${options.scopes.join(', ')}.`),
+      diagnostic(source, 'commit-message/scope', {
+        message: `Allowed scopes: ${options.scopes.join(', ')}.`,
+      }),
     );
   return diagnostics;
 };

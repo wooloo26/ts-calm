@@ -28,12 +28,10 @@ export const checkNoFileCycles = (
         const source = sources.get(file);
         if (source)
           diagnostics.push(
-            diagnostic(
-              source,
-              'no-file-cycles',
-              `File cycle: ${[...trail.slice(start), edge.path].join(' -> ')}`,
-              edge.offset,
-            ),
+            diagnostic(source, 'no-file-cycles', {
+              message: `File cycle: ${[...trail.slice(start), edge.path].join(' -> ')}`,
+              offset: edge.offset,
+            }),
           );
       } else visit(edge.path);
     }

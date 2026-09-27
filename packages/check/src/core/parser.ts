@@ -1,18 +1,20 @@
-/**
- * @boundary Interpret the parser's external AST shape and report invalid syntax as diagnostics.
- * @allow strict-fp/no-assertion -- Record guards normalize unknown AST nodes without changing values.
- * @allow strict-fp/no-null -- ESTree represents missing syntax and null literals explicitly.
- * @allow strict-fp/no-try -- Native parser failures must become visible diagnostics.
- */
 import { parseSync } from 'oxc-parser';
-import type { Fact, FunctionFact, ImportFact, ParsedSource, SourceFile } from '#src/core/types';
+import { capture } from '@ts-calm/fp/boundary';
+import { get, getError, isErr, isNull, isPlainObject } from '@ts-calm/fp';
+import type {
+  Fact,
+  FunctionFact,
+  ImportFact,
+  ParsedSource,
+  SignatureFact,
+  SourceFile,
+} from '#src/core/types';
 
 export type Node = Readonly<Record<string, unknown>>;
 export type Child = Readonly<{ key: string; node: Node }>;
 type Environment = ReadonlyMap<string, string>;
 const absent: Node = Object.freeze({});
-export const record = (value: unknown): Node =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Node) : absent;
+export const record = (value: unknown): Node => (isPlainObject(value) ? value : absent);
 export const text = (node: Node, key: string): string =>
   typeof node[key] === 'string' ? node[key] : '';
 export const offset = (node: Node, key = 'start'): number =>
@@ -166,9 +168,7 @@ const forbidden: Readonly<Record<string, string>> = {
 const strictFact = (
   node: Node,
   parent: Node,
-  key: string,
-  depth: number,
-  env: Environment,
+  { key, depth, env }: Readonly<{ key: string; depth: number; env: Environment }>,
 ): string => {
   const kind = text(node, 'type');
   if (forbidden[kind]) return forbidden[kind];
@@ -177,7 +177,7 @@ const strictFact = (
     text(record(record(node['typeAnnotation'])['typeName']), 'name') !== 'const'
   )
     return 'no-assertion';
-  if (kind === 'Literal' && node['value'] === null) return 'no-null';
+  if (kind === 'Literal' && isNull(node['value'])) return 'no-null';
   const field =
     (key === 'property' && !parent['computed']) ||
     (key === 'key' && !parent['computed']) ||
@@ -265,6 +265,7 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
     issues: Fact[] = [];
   const functions: FunctionFact[] = [],
     imports: ImportFact[] = [];
+  const signatures: SignatureFact[] = [];
   for (const error of result.errors)
     issues.push({ name: error.message, offset: error.labels[0]?.start ?? 0 });
   let hasImplementation = false;
@@ -272,9 +273,11 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
   const walk = (
     node: Node,
     parent: Node,
-    key: string,
-    depth: number,
-    inherited: Map<string, string>,
+    {
+      key,
+      depth,
+      inherited,
+    }: Readonly<{ key: string; depth: number; inherited: Map<string, string> }>,
   ): void => {
     const kind = text(node, 'type');
     const env =
@@ -284,7 +287,7 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
     if (kind === 'ImportDeclaration') bindImport(node, env);
     if (kind === 'VariableDeclarator')
       bindPattern(record(node['id']), expressionName(record(node['init']), env), env);
-    const restriction = strictFact(node, parent, key, depth, env);
+    const restriction = strictFact(node, parent, { key, depth, env });
     if (restriction) strict.push({ name: restriction, offset: offset(node) });
     if (kind === 'VariableDeclaration' && node['kind'] === 'var' && depth === 0)
       strict.push({ name: 'no-module-state', offset: offset(node) });
@@ -326,6 +329,29 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
         });
       }
     }
+    if (
+      (functionNode(node) ||
+        [
+          'TSDeclareFunction',
+          'TSFunctionType',
+          'TSConstructorType',
+          'TSMethodSignature',
+          'TSCallSignatureDeclaration',
+          'TSConstructSignatureDeclaration',
+          'TSEmptyBodyFunctionExpression',
+        ].includes(kind)) &&
+      Array.isArray(node['params'])
+    ) {
+      signatures.push({
+        offset: ['MethodDefinition', 'TSAbstractMethodDefinition'].includes(text(parent, 'type'))
+          ? offset(parent)
+          : offset(node),
+        parameters: node['params'].filter((parameter) => {
+          const value = record(parameter);
+          return value['type'] !== 'Identifier' || value['name'] !== 'this';
+        }).length,
+      });
+    }
     if (['CallExpression', 'NewExpression', 'MemberExpression'].includes(kind)) {
       const expression = kind === 'MemberExpression' ? node : record(node['callee']);
       const name = expressionName(expression, env);
@@ -351,9 +377,13 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
       hasImplementation = true;
     }
     for (const child of children(node))
-      walk(child.node, node, child.key, depth + (functionNode(node) ? 1 : 0), env);
+      walk(child.node, node, {
+        key: child.key,
+        depth: depth + (functionNode(node) ? 1 : 0),
+        inherited: env,
+      });
   };
-  walk(record(result.program), {}, '', 0, new Map());
+  walk(record(result.program), {}, { key: '', depth: 0, inherited: new Map() });
   return {
     ast: result.program,
     comments: result.comments.map((comment) => ({
@@ -362,6 +392,7 @@ const collect = (source: SourceFile, custom: readonly string[]): ParsedSource =>
       end: comment.end,
     })),
     functions,
+    signatures,
     imports,
     strict,
     effects,
@@ -374,12 +405,13 @@ export const parseSource = (
   source: SourceFile,
   effectImports: readonly string[] = [],
 ): ParsedSource => {
-  try {
-    return collect(source, effectImports);
-  } catch (cause) {
+  const captured = capture(() => collect(source, effectImports), { name: 'parse-source' });
+  if (isErr(captured)) {
+    const cause = getError(captured).cause;
     return {
       comments: [],
       functions: [],
+      signatures: [],
       imports: [],
       strict: [],
       effects: [],
@@ -387,4 +419,5 @@ export const parseSource = (
       issues: [{ name: cause instanceof Error ? cause.message : 'Parser failed.', offset: 0 }],
     };
   }
+  return get(captured);
 };

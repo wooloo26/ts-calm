@@ -2,6 +2,15 @@
 
 # Rule guide
 
+## function-params
+
+Use at most three parameters in each implementation or callable type signature. Group related inputs in a named object. Optional, default, destructured and rest parameters each count as one; the TypeScript this parameter and generic parameters do not count. For a fixed external interface, use a line allowance in its .b.ts adapter.
+
+```ts
+// @allow function-params -- The vendor invokes this exact four-argument callback.
+export const callback = (error: unknown, request: unknown, response: unknown, next: () => void) => next();
+```
+
 ## purity
 
 Production functions follow a pure-by-default convention. Declare known I/O, time, randomness or external state effects with a leading @impure reason. Local construction and loops are allowed; project calls propagate known effects, while private temporary mutations stay local. Higher-order helpers depend on their callbacks. This bounded analysis does not prove unknown third-party calls, getters, proxies, dynamic dispatch or recursive allocation factories pure. Each root function has a budget of 512 context expansions; purity/incomplete warns when calls remain unvisited. The annotation never bypasses boundary or other checks.
@@ -142,7 +151,7 @@ stock/write.ts -> orders/types.ts
 
 ## boundary
 
-Only direct effects or concrete adaptation justify .b.ts. Adaptation covers bridging an external shape and bridging a type relationship the compiler cannot express, such as correlated overloads. Explain the guarantee with @boundary, declare actual @effects, and prefer functional helpers before adding @allow.
+Only direct effects or concrete adaptation justify .b.ts. Explain the guarantee with a leading @boundary and declare actual @effects. Use fp helpers first. A necessary @allow must be a standalone line comment immediately above its target diagnostic line, with an exact strict-fp check or function-params and a reason. Consecutive directives share the next code line. File-header, trailing and wildcard allowances are rejected. See docs/allow.md for the permitted cases and migration examples.
 
 ```ts
 /**

@@ -1,7 +1,5 @@
 /**
  * @boundary Adapt external nullable values into Option while preserving all other falsy values.
- * @allow strict-fp/no-null -- Compare only against the external absence sentinel.
- * @allow strict-fp/no-undefined -- Compare only against the external absence sentinel.
  */
 import { none, some } from './containers.ts';
 import type { Option } from './containers.ts';
@@ -11,6 +9,8 @@ import type { Option } from './containers.ts';
  * empty string, is a real value and stays inside the Option.
  */
 export const isNonNullable = <Value>(value: Value): value is NonNullable<Value> =>
+  // @allow strict-fp/no-null -- Compare only against the external absence sentinel.
+  // @allow strict-fp/no-undefined -- Compare only against the external absence sentinel.
   value !== null && value !== undefined;
 
 /**

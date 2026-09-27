@@ -2,10 +2,6 @@
  * @boundary Load and validate the project's synchronous configuration; reject invalid options explicitly.
  * @effects node:fs
  * @effects node:module
- * @allow strict-fp/no-assertion -- Cast only after validating every supported configuration field.
- * @allow strict-fp/no-throw -- Invalid configuration is an operational failure handled by the CLI.
- * @allow strict-fp/no-delete -- Reload the selected config instead of retaining a stale require cache entry.
- * @allow strict-fp/no-try -- Always remove this invocation's temporary synchronous module resolver hook.
  */
 import { existsSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
@@ -17,20 +13,24 @@ import { compilerConditions } from '#src/compiler-options.b';
 
 const object = (value: unknown): Record<string, unknown> => {
   if (!isPlainObject(value))
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error('Configuration must contain objects, not null or arrays.');
   return value;
 };
 const keys = (value: Record<string, unknown>, allowed: readonly string[]): void => {
   for (const key of Object.keys(value))
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     if (!allowed.includes(key)) throw new Error(`Unknown configuration option: ${key}`);
 };
 const strings = (value: unknown, key: string): void => {
   if (!isArray(value) || !value.every((item) => typeof item === 'string' && item.length > 0))
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error(`${key} must be an array of nonempty strings.`);
 };
 const ruleNames = [
   'commit-message',
   'function-length',
+  'function-params',
   'boundary',
   'no-file-cycles',
   'no-module-cycles',
@@ -40,7 +40,10 @@ const ruleNames = [
 
 const validateRuleOptions = (name: string, value: unknown): void => {
   if (typeof value === 'boolean') return;
-  if (['boundary', 'no-file-cycles', 'no-module-cycles', 'purity'].includes(name))
+  if (
+    ['boundary', 'function-params', 'no-file-cycles', 'no-module-cycles', 'purity'].includes(name)
+  )
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error(`${name} must be a boolean.`);
   const options = object(value);
   const allowed =
@@ -53,14 +56,17 @@ const validateRuleOptions = (name: string, value: unknown): void => {
   for (const [key, option] of Object.entries(options)) {
     if (key === 'scopes') strings(option, key);
     else if (key === 'ascii' || name === 'strict-fp') {
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       if (typeof option !== 'boolean') throw new Error(`${key} must be a boolean.`);
     } else if (typeof option !== 'number' || !Number.isSafeInteger(option) || option < 1)
+      // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
       throw new Error(`${key} must be a positive integer.`);
   }
   if (
     name === 'function-length' &&
     Number(options['warning'] ?? 80) > Number(options['maximum'] ?? 150)
   )
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     throw new Error('function-length warning must not exceed maximum.');
 };
 
@@ -75,6 +81,7 @@ export const validateConfiguration = (value: unknown): CheckConfig => {
     for (const [name, options] of Object.entries(rules)) validateRuleOptions(name, options);
   }
   if ('overrides' in config) {
+    // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
     if (!Array.isArray(config['overrides'])) throw new Error('overrides must be an array.');
     for (const item of config['overrides']) {
       const override = object(item);
@@ -84,11 +91,14 @@ export const validateConfiguration = (value: unknown): CheckConfig => {
       keys(rules, ruleNames);
       for (const [name, enabled] of Object.entries(rules)) {
         if (name === 'no-file-cycles' || name === 'no-module-cycles' || name === 'commit-message')
+          // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
           throw new Error(`${name} is project-wide; configure it at rules, not overrides.`);
+        // @allow strict-fp/no-throw -- Preserve the public boundary API exception contract; returning Result here would change callers.
         if (typeof enabled !== 'boolean') throw new Error('Override rules must be booleans.');
       }
     }
   }
+  // @allow strict-fp/no-assertion -- Cast only after validating every supported configuration field.
   return config as CheckConfig;
 };
 
@@ -117,6 +127,7 @@ const configurationPath = (root: string): string => {
  */
 const loadModule = (path: string): unknown => {
   const load = createRequire(import.meta.url);
+  // @allow strict-fp/no-delete -- Reload the selected config instead of retaining a stale require cache entry.
   delete load.cache[path];
   const conditions = compilerConditions(dirname(path), path, new Map());
   const hooks = registerHooks({
@@ -124,6 +135,7 @@ const loadModule = (path: string): unknown => {
       return next(specifier, { ...context, conditions: [...context.conditions, ...conditions] });
     },
   });
+  // @allow strict-fp/no-try -- Preserve unconditional cleanup and exception precedence required by this boundary API.
   try {
     return load(path);
   } finally {
